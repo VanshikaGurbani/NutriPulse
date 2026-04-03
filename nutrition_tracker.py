@@ -532,6 +532,39 @@ div[data-testid="stDataFrame"] {
 .goal-stats .remaining-green  { color: #2d6a4f; font-weight: 600; }
 .goal-stats .remaining-yellow { color: #f57f17; font-weight: 600; }
 .goal-stats .remaining-red    { color: #c62828; font-weight: 600; }
+
+/* ── Meal section headers ── */
+.meal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: 10px;
+    padding: 8px 14px;
+    margin: 14px 0 6px;
+    font-weight: 600;
+    font-size: 0.92rem;
+}
+.meal-header .meal-kcal {
+    font-size: 0.82rem;
+    opacity: 0.85;
+    font-weight: 500;
+}
+
+/* ── Meal radio pill selector ── */
+div[data-testid="stRadio"] > div {
+    gap: 8px !important;
+}
+div[data-testid="stRadio"] label {
+    border: 1.5px solid #b7d5c0 !important;
+    border-radius: 20px !important;
+    padding: 4px 14px !important;
+    font-size: 0.85rem !important;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+div[data-testid="stRadio"] label:hover {
+    background: #e8f5e9 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -549,6 +582,22 @@ if "serving_unit" not in st.session_state:
     st.session_state.serving_unit = "g"
 if "calorie_goal" not in st.session_state:
     st.session_state.calorie_goal = 2000
+if "selected_meal" not in st.session_state:
+    st.session_state.selected_meal = "🌅 Breakfast"
+
+MEALS = ["🌅 Breakfast", "☀️ Lunch", "🌙 Dinner", "🍎 Snack"]
+MEAL_COLORS = {
+    "🌅 Breakfast": "#fff3e0",
+    "☀️ Lunch":     "#e3f2fd",
+    "🌙 Dinner":    "#f3e5f5",
+    "🍎 Snack":     "#e8f5e9",
+}
+MEAL_TEXT_COLORS = {
+    "🌅 Breakfast": "#e65100",
+    "☀️ Lunch":     "#1565c0",
+    "🌙 Dinner":    "#6a1b9a",
+    "🍎 Snack":     "#2e7d32",
+}
 
 
 # ── Hero Banner ───────────────────────────────────────────────────────────────
@@ -742,8 +791,20 @@ if st.session_state.last_result:
         </div>
         """, unsafe_allow_html=True)
 
+        # Meal selector
+        meal_idx = MEALS.index(st.session_state.selected_meal) if st.session_state.selected_meal in MEALS else 0
+        selected_meal = st.radio(
+            "Add to meal",
+            MEALS,
+            index=meal_idx,
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        st.session_state.selected_meal = selected_meal
+
         if st.button("➕ Add to Today's Log", type="primary"):
             entry = {
+                "Meal": selected_meal,
                 "Food": f"{st.session_state.last_input} ({grams:.0f}g)",
                 "Calories (kcal)": cal,
                 "Carbs (g)": carbs,
@@ -752,7 +813,7 @@ if st.session_state.last_result:
                 "Fiber (g)": fiber,
             }
             st.session_state.food_log.append(entry)
-            st.success(f"✅ Added **{st.session_state.last_input}** ({grams:.0f}g) to your log!")
+            st.success(f"✅ Added **{st.session_state.last_input}** ({grams:.0f}g) to **{selected_meal}**!")
 
 # ── Daily Food Log Card ───────────────────────────────────────────────────────
 with st.container(border=True):
@@ -762,7 +823,23 @@ with st.container(border=True):
         import pandas as pd
 
         df = pd.DataFrame(st.session_state.food_log)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+
+        # ── Grouped by meal ───────────────────────────────────────────────────
+        DISPLAY_COLS = ["Food", "Calories (kcal)", "Carbs (g)", "Protein (g)", "Fat (g)", "Fiber (g)"]
+        for meal in MEALS:
+            meal_df = df[df["Meal"] == meal][DISPLAY_COLS] if "Meal" in df.columns else pd.DataFrame()
+            if not meal_df.empty:
+                meal_cal = round(meal_df["Calories (kcal)"].sum(), 1)
+                bg  = MEAL_COLORS.get(meal, "#f5f5f5")
+                col = MEAL_TEXT_COLORS.get(meal, "#333")
+                st.markdown(
+                    f'<div class="meal-header" style="background:{bg};color:{col}">'
+                    f'<span>{meal}</span>'
+                    f'<span class="meal-kcal">{meal_cal} kcal</span>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                st.dataframe(meal_df, use_container_width=True, hide_index=True)
 
         col_clear, _ = st.columns([1, 4])
         with col_clear:
