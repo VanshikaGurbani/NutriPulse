@@ -131,11 +131,14 @@ def _score(food: dict, q_words: list) -> float:
     Score a USDA food result for relevance to the query.
 
       +10  description's first token == first query word  (strong direct match)
-      +5   all query words appear in the opening tokens   (handles USDA "Rice, brown" style)
+      +5   first token is a query word AND all query words in opening tokens
+           (handles USDA "Rice, brown" style — but NOT "Bread, oatmeal")
       +1   each query word found as a whole word anywhere (word-boundary safe)
       +4   description contains "cooked"                  (users log what they ate)
       -3   description contains "raw"                     (penalise uncooked entries)
-      -5   description's first token is NOT any query word (off-topic leading word)
+      -8   description's first token is NOT any query word (off-topic leading word)
+      -10  wrong-category: first token off-topic AND a query word only appears
+           after a comma (e.g. "Bread, oatmeal" for query "oatmeal")
       -50  calories > 900 kcal/100g                       (branded data error)
       -len slight penalty for long descriptions
     """
@@ -146,9 +149,12 @@ def _score(food: dict, q_words: list) -> float:
     all_present = all(re.search(rf"\b{re.escape(w)}\b", desc) for w in q_words)
     starts_with = 10 if (q_words and tokens and tokens[0] == q_words[0] and all_present) else 0
 
-    # USDA often inverts names: "Rice, brown" for "brown rice" — reward that
+    # USDA often inverts names: "Rice, brown" → "brown rice" — reward that.
+    # Guard: only fires when the first token is itself a query word, so "Bread, oatmeal"
+    # does NOT get this bonus for query "oatmeal" (first token "bread" ∉ q_words).
     n = max(len(q_words) + 1, 3)
-    in_first_tokens = 5 if all(w in tokens[:n] for w in q_words) else 0
+    first_token_relevant = bool(tokens and tokens[0] in q_words)
+    in_first_tokens = 5 if (first_token_relevant and all(w in tokens[:n] for w in q_words)) else 0
 
     # Whole-word matches only — "corn" must NOT score on "popcorn"
     word_hits = sum(1 for w in q_words if re.search(rf"\b{re.escape(w)}\b", desc))
@@ -164,7 +170,25 @@ def _score(food: dict, q_words: list) -> float:
         raw_penalty  = 0
 
     # Penalise if the description opens with a word unrelated to the query
-    first_mismatch = -5 if (tokens and tokens[0] not in q_words) else 0
+    first_mismatch = -8 if (tokens and tokens[0] not in q_words) else 0
+
+    # Extra penalty: wrong-category pattern — "Bread, oatmeal" for query "oatmeal"
+    # means oatmeal-flavoured bread, not oatmeal.  Detected when:
+    #   • first token is off-topic (not a query word)
+    #   • a query word appears only in a secondary comma-segment
+    wrong_category = 0
+    if first_mismatch and q_words:
+        segments = [s.strip() for s in desc.split(",")]
+        query_in_secondary = (
+            len(segments) > 1
+            and not any(re.search(rf"\b{re.escape(w)}\b", segments[0]) for w in q_words)
+            and any(
+                re.search(rf"\b{re.escape(w)}\b", seg)
+                for w in q_words
+                for seg in segments[1:]
+            )
+        )
+        wrong_category = -10 if query_in_secondary else 0
 
     # Penalise physically impossible calorie values
     nutrients = {n_["nutrientId"]: n_.get("value", 0) for n_ in food.get("foodNutrients", [])}
@@ -172,7 +196,7 @@ def _score(food: dict, q_words: list) -> float:
 
     brevity = -len(desc) / 200
     return (starts_with + in_first_tokens + word_hits + cooked_bonus + raw_penalty
-            + first_mismatch + calorie_penalty + brevity)
+            + first_mismatch + wrong_category + calorie_penalty + brevity)
 
 
 def best_match(foods: list, query: str) -> tuple:
@@ -184,7 +208,7 @@ def best_match(foods: list, query: str) -> tuple:
 
 def _fetch(query: str, data_type: str | None) -> list:
     """Single USDA API call for one data type."""
-    params = {"query": query, "api_key": API_KEY, "pageSize": 5}
+    params = {"query": query, "api_key": API_KEY, "pageSize": 8}
     if data_type:
         params["dataType"] = data_type
     try:
@@ -196,14 +220,19 @@ def _fetch(query: str, data_type: str | None) -> list:
 
 
 def search_food(query: str):
-    """Search USDA FoodData Central using a tiered, multi-source strategy."""
+    """Search USDA FoodData Central using a multi-source strategy.
+
+    All three high-quality sources are always queried so the scorer always
+    has a rich, diverse candidate pool to choose from regardless of which
+    individual source happens to return fewer results.
+    """
     all_foods: list = []
 
-    for dt in ["Foundation", "Survey (FNDDS)"]:
+    # Always query all three trusted sources — don't gate SR Legacy behind a
+    # threshold, because Foundation/Survey may return off-topic results that
+    # would suppress SR Legacy even when SR Legacy has the best match.
+    for dt in ["Foundation", "Survey (FNDDS)", "SR Legacy"]:
         all_foods.extend(_fetch(query, dt))
-
-    if len(all_foods) < 3:
-        all_foods.extend(_fetch(query, "SR Legacy"))
 
     if not all_foods:
         all_foods = _fetch(query, None)
