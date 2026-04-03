@@ -143,7 +143,6 @@ def _score(food: dict, q_words: list) -> float:
     tokens = re.split(r"[\s,]+", desc)
 
     # Strong bonus: opens with the first query word AND all query words are present
-    # (guards against "Olive garden dressing" beating "Oil, olive" for "olive oil")
     all_present = all(re.search(rf"\b{re.escape(w)}\b", desc) for w in q_words)
     starts_with = 10 if (q_words and tokens and tokens[0] == q_words[0] and all_present) else 0
 
@@ -155,7 +154,6 @@ def _score(food: dict, q_words: list) -> float:
     word_hits = sum(1 for w in q_words if re.search(rf"\b{re.escape(w)}\b", desc))
 
     # Prefer cooked results — users log food they have eaten, not raw ingredients.
-    # Skip this adjustment for foods that are naturally consumed raw (fruits, oils, etc.)
     is_raw_food = any(rw in " ".join(q_words) for rw in RAW_FOODS)
     user_specified_prep = any(w in q_words for w in ("raw", "cooked", "baked", "grilled", "boiled", "fried", "roasted"))
     if not is_raw_food and not user_specified_prep:
@@ -166,10 +164,9 @@ def _score(food: dict, q_words: list) -> float:
         raw_penalty  = 0
 
     # Penalise if the description opens with a word unrelated to the query
-    # e.g. "Flour, rice, brown" for query "brown rice" → first token "flour" ∉ q_words
     first_mismatch = -5 if (tokens and tokens[0] not in q_words) else 0
 
-    # Penalise physically impossible calorie values (branded product data errors)
+    # Penalise physically impossible calorie values
     nutrients = {n_["nutrientId"]: n_.get("value", 0) for n_ in food.get("foodNutrients", [])}
     calorie_penalty = -50 if nutrients.get(NUTRIENT_IDS["calories"], 0) > MAX_SANE_CALORIES else 0
 
@@ -186,12 +183,7 @@ def best_match(foods: list, query: str) -> tuple:
 
 
 def _fetch(query: str, data_type: str | None) -> list:
-    """
-    Single USDA API call for one data type (or all types if data_type is None).
-    Returns list of food dicts; returns [] on HTTP errors so callers can continue.
-    Each dataType is sent in its own request — the USDA API does NOT accept
-    comma-separated values and rejects them with a 400.
-    """
+    """Single USDA API call for one data type."""
     params = {"query": query, "api_key": API_KEY, "pageSize": 5}
     if data_type:
         params["dataType"] = data_type
@@ -204,33 +196,18 @@ def _fetch(query: str, data_type: str | None) -> list:
 
 
 def search_food(query: str):
-    """
-    Search USDA FoodData Central using a tiered, multi-source strategy.
-
-    Strategy:
-      Tier 1  Foundation + Survey (FNDDS) queried SEPARATELY — avoids the
-              400 error that occurs when combining them as one comma-separated
-              dataType value. Candidates from both are pooled so best_match
-              can compare across sources (e.g. Foundation's "Flour, rice, brown"
-              loses to Survey's "Rice, brown" for the query "brown rice").
-      Tier 2  SR Legacy — added if Tier 1 returned fewer than 3 candidates.
-      Tier 3  No filter — last resort; may include Branded products.
-    """
+    """Search USDA FoodData Central using a tiered, multi-source strategy."""
     all_foods: list = []
 
-    # Tier 1 — query each high-quality source separately and pool results
     for dt in ["Foundation", "Survey (FNDDS)"]:
         all_foods.extend(_fetch(query, dt))
 
-    # Tier 2 — widen the pool if Tier 1 gave too few candidates
     if len(all_foods) < 3:
         all_foods.extend(_fetch(query, "SR Legacy"))
 
-    # Tier 3 — no-filter fallback (includes Branded)
     if not all_foods:
         all_foods = _fetch(query, None)
         if not all_foods:
-            # Final attempt: raise so the UI shows the real error message
             resp = requests.get(
                 f"{API_BASE}/foods/search",
                 params={"query": query, "api_key": API_KEY, "pageSize": 5},
@@ -243,7 +220,6 @@ def search_food(query: str):
     nutrients = {n["nutrientId"]: n.get("value", 0)
                  for n in food.get("foodNutrients", [])}
 
-    # Foundation foods may store calories under ID 2047 instead of 1008
     calories = round(
         next((nutrients[cid] for cid in CALORIE_IDS if nutrients.get(cid, 0) > 0), 0),
         1
@@ -270,6 +246,237 @@ def search_food(query: str):
     }
 
 
+# ── Page config ───────────────────────────────────────────────────────────────
+st.set_page_config(page_title="NutriPulse", page_icon="🥗", layout="centered")
+
+# ── Global CSS ────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+/* ── Google Font ── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif;
+}
+
+/* ── Page background ── */
+.stApp {
+    background: #f0f5f0;
+}
+
+/* ── Hero banner ── */
+.hero-banner {
+    background: linear-gradient(135deg, #2d6a4f 0%, #40916c 50%, #52b788 100%);
+    border-radius: 16px;
+    padding: 32px 36px;
+    margin-bottom: 28px;
+    color: white;
+    box-shadow: 0 8px 32px rgba(45, 106, 79, 0.3);
+}
+.hero-banner h1 {
+    font-size: 2.4rem;
+    font-weight: 700;
+    margin: 0 0 6px 0;
+    letter-spacing: -0.5px;
+}
+.hero-banner p {
+    font-size: 1rem;
+    opacity: 0.88;
+    margin: 0;
+}
+
+/* ── Section cards ── */
+.section-card {
+    background: white;
+    border-radius: 14px;
+    padding: 24px 28px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    border: 1px solid #e8f0e8;
+}
+.section-title {
+    font-size: 1.15rem;
+    font-weight: 650;
+    color: #2d6a4f;
+    margin: 0 0 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ── Macro metric cards ── */
+.macro-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin: 16px 0;
+}
+.macro-card {
+    border-radius: 12px;
+    padding: 14px 10px;
+    text-align: center;
+    transition: transform 0.15s ease;
+}
+.macro-card:hover { transform: translateY(-2px); }
+.macro-card .macro-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.macro-card .macro-label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-top: 4px;
+    opacity: 0.8;
+}
+
+.macro-calories { background: #fff3e0; color: #e65100; }
+.macro-carbs    { background: #fff8e1; color: #f57f17; }
+.macro-protein  { background: #e3f2fd; color: #1565c0; }
+.macro-fat      { background: #f3e5f5; color: #6a1b9a; }
+.macro-fiber    { background: #e8f5e9; color: #2e7d32; }
+
+/* ── Food log table ── */
+.food-log-empty {
+    text-align: center;
+    padding: 36px 0;
+    color: #888;
+    font-size: 0.95rem;
+}
+.food-log-empty .empty-icon {
+    font-size: 2.5rem;
+    display: block;
+    margin-bottom: 8px;
+}
+
+/* ── Source pill ── */
+.source-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: #e8f5e9;
+    color: #2d6a4f;
+    margin-left: 6px;
+}
+
+/* ── Result food name ── */
+.result-food-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1a2e1a;
+    margin-bottom: 4px;
+}
+.result-serving-info {
+    font-size: 0.82rem;
+    color: #666;
+    margin-bottom: 16px;
+}
+
+/* ── Daily totals strip ── */
+.totals-strip {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: linear-gradient(135deg, #2d6a4f, #40916c);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin: 16px 0;
+    color: white;
+}
+.total-item {
+    flex: 1;
+    min-width: 90px;
+    text-align: center;
+}
+.total-item .t-val {
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.total-item .t-lbl {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    opacity: 0.82;
+    margin-top: 3px;
+}
+
+/* ── Streamlit overrides ── */
+div[data-testid="stTextInput"] input {
+    border-radius: 10px !important;
+    border: 1.5px solid #b7d5c0 !important;
+    padding: 10px 14px !important;
+    font-size: 0.95rem !important;
+}
+div[data-testid="stTextInput"] input:focus {
+    border-color: #40916c !important;
+    box-shadow: 0 0 0 3px rgba(64,145,108,0.15) !important;
+}
+
+/* Primary button */
+div[data-testid="stButton"] > button[kind="primary"] {
+    background: linear-gradient(135deg, #2d6a4f, #40916c) !important;
+    border: none !important;
+    border-radius: 10px !important;
+    padding: 10px 24px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.3px !important;
+    box-shadow: 0 4px 12px rgba(45,106,79,0.3) !important;
+    transition: all 0.2s !important;
+}
+div[data-testid="stButton"] > button[kind="primary"]:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 18px rgba(45,106,79,0.4) !important;
+}
+
+/* Secondary button */
+div[data-testid="stButton"] > button[kind="secondary"] {
+    border-radius: 10px !important;
+    border: 1.5px solid #b7d5c0 !important;
+    color: #2d6a4f !important;
+    font-weight: 500 !important;
+}
+
+/* Number input & selectbox */
+div[data-testid="stNumberInput"] input,
+div[data-testid="stSelectbox"] > div {
+    border-radius: 10px !important;
+}
+
+/* Divider */
+hr {
+    border-color: #dce8dc !important;
+    margin: 24px 0 !important;
+}
+
+/* Success / warning / error messages */
+div[data-testid="stAlert"] {
+    border-radius: 10px !important;
+}
+
+/* Streamlit default metric — hide (we use custom cards) */
+div[data-testid="metric-container"] {
+    background: white;
+    border-radius: 12px;
+    padding: 12px 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border: 1px solid #e8f0e8;
+}
+
+/* Dataframe */
+div[data-testid="stDataFrame"] {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #e0ece0 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 # ── Session state init ────────────────────────────────────────────────────────
 if "food_log" not in st.session_state:
     st.session_state.food_log = []
@@ -282,10 +489,14 @@ if "serving_qty" not in st.session_state:
 if "serving_unit" not in st.session_state:
     st.session_state.serving_unit = "g"
 
-# ── Page config ───────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Nutrition Tracker", page_icon="🥗", layout="centered")
-st.title("🥗 Nutrition Tracker")
-st.caption("Powered by USDA FoodData Central")
+
+# ── Hero Banner ───────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="hero-banner">
+    <h1>🥗 NutriPulse</h1>
+    <p>Track what you eat · Powered by USDA FoodData Central</p>
+</div>
+""", unsafe_allow_html=True)
 
 # ── API key check ─────────────────────────────────────────────────────────────
 if not API_KEY:
@@ -297,14 +508,26 @@ if not API_KEY:
     )
     st.stop()
 
-# ── Food Search ───────────────────────────────────────────────────────────────
-st.header("Food Search")
+# ── Food Search Card ──────────────────────────────────────────────────────────
+st.markdown('<div class="section-card">', unsafe_allow_html=True)
+st.markdown('<p class="section-title">🔍 Search a Food</p>', unsafe_allow_html=True)
+
 food_input = st.text_input(
-    "Enter a food (e.g. '2 cups oatmeal', '1.5 oz chicken', '3 tbsp peanut butter')",
-    placeholder="2 cups oatmeal",
+    "Food item",
+    placeholder="e.g. 2 cups oatmeal · 1.5 oz chicken · 3 tbsp peanut butter",
+    label_visibility="collapsed",
 )
 
-if st.button("Analyze Food", type="primary"):
+col_btn, col_hint = st.columns([1, 3])
+with col_btn:
+    analyze_clicked = st.button("Analyze Food", type="primary", use_container_width=True)
+with col_hint:
+    st.markdown(
+        "<span style='color:#888;font-size:0.82rem;line-height:2.6'>Tip: include quantity & unit — e.g. <em>\"2 cups brown rice\"</em></span>",
+        unsafe_allow_html=True,
+    )
+
+if analyze_clicked:
     if not food_input.strip():
         st.warning("Please enter a food item first.")
     else:
@@ -314,8 +537,7 @@ if st.button("Analyze Food", type="primary"):
                 result = search_food(food_name)
                 if result is None:
                     st.warning(
-                        "No results found — try a simpler food name like "
-                        "'brown rice' or 'chicken breast'"
+                        "No results found — try a simpler name like 'brown rice' or 'chicken breast'."
                     )
                     st.session_state.last_result = None
                 else:
@@ -327,25 +549,27 @@ if st.button("Analyze Food", type="primary"):
                 st.error(f"API error: {e}")
                 st.session_state.last_result = None
 
-# ── Nutrition card ────────────────────────────────────────────────────────────
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ── Nutrition Results Card ────────────────────────────────────────────────────
 if st.session_state.last_result:
     r = st.session_state.last_result
-    st.subheader(f"Results for: {st.session_state.last_input}")
 
-    # ── Confidence / data quality warnings ───────────────────────────────────
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">📊 Nutrition Info</p>', unsafe_allow_html=True)
+
+    # Confidence / data quality warnings
     if r.get("low_confidence"):
         st.warning(
-            "⚠️ **Low confidence match** — the USDA result may not match "
-            "your food exactly. Try rephrasing (e.g. 'rolled oats' instead of 'oatmeal')."
+            "⚠️ **Low confidence match** — the USDA result may not be exact. "
+            "Try rephrasing, e.g. *'rolled oats'* instead of *'oatmeal'*."
         )
     if r.get("suspicious_calories"):
         st.error(
-            "🚨 **Unusual calorie value detected** — this result may be from a "
-            "branded product with incorrect per-100g data. The numbers may not "
-            "be accurate."
+            "🚨 **Unusual calorie value** — this may be branded product data. Numbers may not be accurate."
         )
 
-    # ── Serving size controls ─────────────────────────────────────────────────
+    # Serving size controls
     col_qty, col_unit = st.columns([1, 2])
     serving_qty = col_qty.number_input(
         "Amount",
@@ -367,35 +591,63 @@ if st.session_state.last_result:
     grams = serving_qty * UNIT_TO_GRAMS.get(serving_unit, 1.0)
     factor = grams / 100
 
-    # Source badge + serving info
-    st.caption(
-        f"USDA match: *{r['description']}* · **{grams:.0f} g** serving "
-        f"· {r.get('source', '')}"
+    # Food name + source badge + serving info
+    st.markdown(
+        f'<div class="result-food-name">{r["description"]}'
+        f'<span class="source-pill">{r.get("source", "")}</span></div>'
+        f'<div class="result-serving-info">Serving: {serving_qty:g} {serving_unit} = {grams:.0f} g</div>',
+        unsafe_allow_html=True,
     )
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Calories", f"{round(r['calories'] * factor, 1)} kcal")
-    col2.metric("Carbs", f"{round(r['carbs'] * factor, 1)} g")
-    col3.metric("Protein", f"{round(r['protein'] * factor, 1)} g")
-    col4.metric("Fat", f"{round(r['fat'] * factor, 1)} g")
-    st.metric("Fiber", f"{round(r['fiber'] * factor, 1)} g", label_visibility="visible")
+    # Macro cards
+    cal   = round(r["calories"] * factor, 1)
+    carbs = round(r["carbs"]    * factor, 1)
+    prot  = round(r["protein"]  * factor, 1)
+    fat   = round(r["fat"]      * factor, 1)
+    fiber = round(r["fiber"]    * factor, 1)
 
-    if st.button("➕ Add to Today's Log"):
+    st.markdown(f"""
+    <div class="macro-grid">
+        <div class="macro-card macro-calories">
+            <div class="macro-value">{cal}</div>
+            <div class="macro-label">kcal</div>
+        </div>
+        <div class="macro-card macro-carbs">
+            <div class="macro-value">{carbs}g</div>
+            <div class="macro-label">Carbs</div>
+        </div>
+        <div class="macro-card macro-protein">
+            <div class="macro-value">{prot}g</div>
+            <div class="macro-label">Protein</div>
+        </div>
+        <div class="macro-card macro-fat">
+            <div class="macro-value">{fat}g</div>
+            <div class="macro-label">Fat</div>
+        </div>
+        <div class="macro-card macro-fiber">
+            <div class="macro-value">{fiber}g</div>
+            <div class="macro-label">Fiber</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("➕ Add to Today's Log", type="primary"):
         entry = {
             "Food": f"{st.session_state.last_input} ({grams:.0f}g)",
-            "Calories (kcal)": round(r["calories"] * factor, 1),
-            "Carbs (g)": round(r["carbs"] * factor, 1),
-            "Protein (g)": round(r["protein"] * factor, 1),
-            "Fat (g)": round(r["fat"] * factor, 1),
-            "Fiber (g)": round(r["fiber"] * factor, 1),
+            "Calories (kcal)": cal,
+            "Carbs (g)": carbs,
+            "Protein (g)": prot,
+            "Fat (g)": fat,
+            "Fiber (g)": fiber,
         }
         st.session_state.food_log.append(entry)
-        st.success(f"Added '{st.session_state.last_input}' ({grams:.0f}g) to your log!")
+        st.success(f"✅ Added **{st.session_state.last_input}** ({grams:.0f}g) to your log!")
 
-st.divider()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# ── Daily Food Log ────────────────────────────────────────────────────────────
-st.header("Today's Food Log")
+# ── Daily Food Log Card ───────────────────────────────────────────────────────
+st.markdown('<div class="section-card">', unsafe_allow_html=True)
+st.markdown('<p class="section-title">📋 Today\'s Food Log</p>', unsafe_allow_html=True)
 
 if st.session_state.food_log:
     import pandas as pd
@@ -403,75 +655,116 @@ if st.session_state.food_log:
     df = pd.DataFrame(st.session_state.food_log)
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-    if st.button("🗑️ Clear Log"):
-        st.session_state.food_log = []
-        st.session_state.last_result = None
-        st.rerun()
+    col_clear, _ = st.columns([1, 4])
+    with col_clear:
+        if st.button("🗑️ Clear Log", use_container_width=True):
+            st.session_state.food_log = []
+            st.session_state.last_result = None
+            st.rerun()
 
-    # ── Running totals ────────────────────────────────────────────────────────
-    st.subheader("Daily Totals")
-    total_cal = round(df["Calories (kcal)"].sum(), 1)
-    total_carbs = round(df["Carbs (g)"].sum(), 1)
+    # ── Daily totals strip ────────────────────────────────────────────────────
+    total_cal    = round(df["Calories (kcal)"].sum(), 1)
+    total_carbs  = round(df["Carbs (g)"].sum(), 1)
     total_protein = round(df["Protein (g)"].sum(), 1)
-    total_fat = round(df["Fat (g)"].sum(), 1)
+    total_fat    = round(df["Fat (g)"].sum(), 1)
+    total_fiber  = round(df["Fiber (g)"].sum(), 1)
 
-    t1, t2, t3, t4 = st.columns(4)
-    t1.metric("Total Calories", f"{total_cal} kcal")
-    t2.metric("Total Carbs", f"{total_carbs} g")
-    t3.metric("Total Protein", f"{total_protein} g")
-    t4.metric("Total Fat", f"{total_fat} g")
+    st.markdown(f"""
+    <div class="totals-strip">
+        <div class="total-item">
+            <div class="t-val">{total_cal}</div>
+            <div class="t-lbl">kcal total</div>
+        </div>
+        <div class="total-item">
+            <div class="t-val">{total_carbs}g</div>
+            <div class="t-lbl">Carbs</div>
+        </div>
+        <div class="total-item">
+            <div class="t-val">{total_protein}g</div>
+            <div class="t-lbl">Protein</div>
+        </div>
+        <div class="total-item">
+            <div class="t-val">{total_fat}g</div>
+            <div class="t-lbl">Fat</div>
+        </div>
+        <div class="total-item">
+            <div class="t-val">{total_fiber}g</div>
+            <div class="t-lbl">Fiber</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     # ── Macro breakdown chart ─────────────────────────────────────────────────
-    st.subheader("Macro Breakdown")
+    st.markdown('<p class="section-title" style="margin-top:20px">🥧 Macro Breakdown</p>', unsafe_allow_html=True)
+
     carb_cal = total_carbs * 4
     protein_cal = total_protein * 4
     fat_cal = total_fat * 9
     total_macro_cal = carb_cal + protein_cal + fat_cal
 
     if total_macro_cal > 0:
-        carb_pct = round(carb_cal / total_macro_cal * 100, 1)
+        carb_pct    = round(carb_cal    / total_macro_cal * 100, 1)
         protein_pct = round(protein_cal / total_macro_cal * 100, 1)
-        fat_pct = round(100 - carb_pct - protein_pct, 1)
+        fat_pct     = round(100 - carb_pct - protein_pct, 1)
 
         fig = go.Figure()
         fig.add_trace(go.Bar(
             name="Carbs",
-            x=[carb_pct],
-            y=["Macros"],
+            x=[carb_pct], y=["Macros"],
             orientation="h",
-            marker_color="#4C72B0",
+            marker_color="#f9a825",
             text=f"Carbs {carb_pct}%",
-            textposition="inside",
-            insidetextanchor="middle",
+            textposition="inside", insidetextanchor="middle",
+            textfont=dict(color="white", size=13, family="Inter"),
         ))
         fig.add_trace(go.Bar(
             name="Protein",
-            x=[protein_pct],
-            y=["Macros"],
+            x=[protein_pct], y=["Macros"],
             orientation="h",
-            marker_color="#55A868",
+            marker_color="#1976d2",
             text=f"Protein {protein_pct}%",
-            textposition="inside",
-            insidetextanchor="middle",
+            textposition="inside", insidetextanchor="middle",
+            textfont=dict(color="white", size=13, family="Inter"),
         ))
         fig.add_trace(go.Bar(
             name="Fat",
-            x=[fat_pct],
-            y=["Macros"],
+            x=[fat_pct], y=["Macros"],
             orientation="h",
-            marker_color="#DD8452",
+            marker_color="#8e24aa",
             text=f"Fat {fat_pct}%",
-            textposition="inside",
-            insidetextanchor="middle",
+            textposition="inside", insidetextanchor="middle",
+            textfont=dict(color="white", size=13, family="Inter"),
         ))
         fig.update_layout(
             barmode="stack",
-            xaxis=dict(title="% of Calories", range=[0, 100]),
+            xaxis=dict(title="% of Calories", range=[0, 100], gridcolor="#f0f0f0"),
             yaxis=dict(showticklabels=False),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            height=180,
-            margin=dict(l=10, r=10, t=40, b=40),
+            legend=dict(
+                orientation="h", yanchor="bottom", y=1.05,
+                xanchor="right", x=1,
+                font=dict(family="Inter", size=12),
+            ),
+            height=160,
+            margin=dict(l=0, r=0, t=36, b=36),
+            paper_bgcolor="white",
+            plot_bgcolor="white",
+            font=dict(family="Inter"),
         )
         st.plotly_chart(fig, use_container_width=True)
+
 else:
-    st.info("Your log is empty. Search for a food above and add it to your log.")
+    st.markdown("""
+    <div class="food-log-empty">
+        <span class="empty-icon">🍽️</span>
+        Your log is empty — search for a food above and tap <strong>Add to Today's Log</strong>.
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ── Footer ────────────────────────────────────────────────────────────────────
+st.markdown("""
+<div style="text-align:center; color:#999; font-size:0.75rem; margin-top:8px; padding-bottom:20px">
+    NutriPulse · Data from USDA FoodData Central · Values per serving shown
+</div>
+""", unsafe_allow_html=True)
