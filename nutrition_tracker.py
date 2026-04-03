@@ -503,6 +503,35 @@ div[data-testid="stDataFrame"] {
     overflow: hidden;
     border: 1px solid #e0ece0 !important;
 }
+
+/* ── Calorie progress bar ── */
+.goal-bar-wrap {
+    background: #e8f0e8;
+    border-radius: 99px;
+    height: 18px;
+    overflow: hidden;
+    margin: 10px 0 6px;
+}
+.goal-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.4s ease, background 0.4s ease;
+}
+.goal-bar-fill.green  { background: linear-gradient(90deg, #52b788, #2d6a4f); }
+.goal-bar-fill.yellow { background: linear-gradient(90deg, #f9a825, #f57f17); }
+.goal-bar-fill.red    { background: linear-gradient(90deg, #ef5350, #b71c1c); }
+
+.goal-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    color: #555;
+    margin-top: 2px;
+}
+.goal-stats .consumed { font-weight: 700; font-size: 1rem; color: #1a2e1a; }
+.goal-stats .remaining-green  { color: #2d6a4f; font-weight: 600; }
+.goal-stats .remaining-yellow { color: #f57f17; font-weight: 600; }
+.goal-stats .remaining-red    { color: #c62828; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -518,6 +547,8 @@ if "serving_qty" not in st.session_state:
     st.session_state.serving_qty = 100.0
 if "serving_unit" not in st.session_state:
     st.session_state.serving_unit = "g"
+if "calorie_goal" not in st.session_state:
+    st.session_state.calorie_goal = 2000
 
 
 # ── Hero Banner ───────────────────────────────────────────────────────────────
@@ -537,6 +568,58 @@ if not API_KEY:
         "Get a free key at https://fdc.nal.usda.gov/api-guide.html"
     )
     st.stop()
+
+# ── Daily Calorie Goal Card ───────────────────────────────────────────────────
+with st.container(border=True):
+    col_goal_title, col_goal_input = st.columns([3, 1])
+    with col_goal_title:
+        st.markdown('<p class="section-title">🎯 Daily Calorie Goal</p>', unsafe_allow_html=True)
+    with col_goal_input:
+        calorie_goal = st.number_input(
+            "Goal (kcal)",
+            min_value=500,
+            max_value=5000,
+            value=st.session_state.calorie_goal,
+            step=50,
+            label_visibility="collapsed",
+        )
+        st.session_state.calorie_goal = calorie_goal
+
+    # Calculate consumed from log
+    consumed = round(
+        sum(e["Calories (kcal)"] for e in st.session_state.food_log), 1
+    )
+    goal = st.session_state.calorie_goal
+    pct = min(consumed / goal, 1.0) if goal > 0 else 0
+    pct_display = min(round(pct * 100, 1), 100)
+
+    # Pick colour tier
+    if pct < 0.75:
+        bar_class = "green"
+        remaining_class = "remaining-green"
+        status_icon = "✅"
+        status_msg = f"{goal - consumed:.0f} kcal remaining"
+    elif pct < 1.0:
+        bar_class = "yellow"
+        remaining_class = "remaining-yellow"
+        status_icon = "⚡"
+        status_msg = f"{goal - consumed:.0f} kcal remaining — almost there!"
+    else:
+        bar_class = "red"
+        remaining_class = "remaining-red"
+        status_icon = "🔴"
+        over = round(consumed - goal, 1)
+        status_msg = f"{over} kcal over goal"
+
+    st.markdown(f"""
+    <div class="goal-bar-wrap">
+        <div class="goal-bar-fill {bar_class}" style="width:{pct_display}%"></div>
+    </div>
+    <div class="goal-stats">
+        <span>{status_icon} <span class="{remaining_class}">{status_msg}</span></span>
+        <span><span class="consumed">{consumed}</span> / {goal} kcal</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ── Food Search Card ──────────────────────────────────────────────────────────
 with st.container(border=True):
