@@ -285,20 +285,21 @@ html, body, [class*="css"] {
     margin: 0;
 }
 
-/* ── Section cards ── */
-.section-card {
-    background: white;
-    border-radius: 14px;
-    padding: 24px 28px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-    border: 1px solid #e8f0e8;
+/* ── Section cards (native st.container border) ── */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: white !important;
+    border-radius: 14px !important;
+    border: 1px solid #daeada !important;
+    box-shadow: 0 2px 14px rgba(0,0,0,0.07) !important;
+    padding: 6px 4px !important;
+    margin-bottom: 8px !important;
 }
+
 .section-title {
-    font-size: 1.15rem;
+    font-size: 1.1rem;
     font-weight: 650;
     color: #2d6a4f;
-    margin: 0 0 16px 0;
+    margin: 0 0 12px 0;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -509,258 +510,252 @@ if not API_KEY:
     st.stop()
 
 # ── Food Search Card ──────────────────────────────────────────────────────────
-st.markdown('<div class="section-card">', unsafe_allow_html=True)
-st.markdown('<p class="section-title">🔍 Search a Food</p>', unsafe_allow_html=True)
+with st.container(border=True):
+    st.markdown('<p class="section-title">🔍 Search a Food</p>', unsafe_allow_html=True)
 
-food_input = st.text_input(
-    "Food item",
-    placeholder="e.g. 2 cups oatmeal · 1.5 oz chicken · 3 tbsp peanut butter",
-    label_visibility="collapsed",
-)
-
-col_btn, col_hint = st.columns([1, 3])
-with col_btn:
-    analyze_clicked = st.button("Analyze Food", type="primary", use_container_width=True)
-with col_hint:
-    st.markdown(
-        "<span style='color:#888;font-size:0.82rem;line-height:2.6'>Tip: include quantity & unit — e.g. <em>\"2 cups brown rice\"</em></span>",
-        unsafe_allow_html=True,
+    food_input = st.text_input(
+        "Food item",
+        placeholder="e.g. 2 cups oatmeal · 1.5 oz chicken · 3 tbsp peanut butter",
+        label_visibility="collapsed",
     )
 
-if analyze_clicked:
-    if not food_input.strip():
-        st.warning("Please enter a food item first.")
-    else:
-        qty, unit, food_name = parse_serving(food_input)
-        with st.spinner(f"Looking up '{food_name}'…"):
-            try:
-                result = search_food(food_name)
-                if result is None:
-                    st.warning(
-                        "No results found — try a simpler name like 'brown rice' or 'chicken breast'."
-                    )
-                    st.session_state.last_result = None
-                else:
-                    st.session_state.last_result = result
-                    st.session_state.last_input = food_input
-                    st.session_state.serving_qty = qty
-                    st.session_state.serving_unit = unit
-            except Exception as e:
-                st.error(f"API error: {e}")
-                st.session_state.last_result = None
+    col_btn, col_hint = st.columns([1, 3])
+    with col_btn:
+        analyze_clicked = st.button("Analyze Food", type="primary", use_container_width=True)
+    with col_hint:
+        st.markdown(
+            "<span style='color:#888;font-size:0.82rem;line-height:2.6'>Tip: include quantity & unit — e.g. <em>\"2 cups brown rice\"</em></span>",
+            unsafe_allow_html=True,
+        )
 
-st.markdown('</div>', unsafe_allow_html=True)
+    if analyze_clicked:
+        if not food_input.strip():
+            st.warning("Please enter a food item first.")
+        else:
+            qty, unit, food_name = parse_serving(food_input)
+            with st.spinner(f"Looking up '{food_name}'…"):
+                try:
+                    result = search_food(food_name)
+                    if result is None:
+                        st.warning(
+                            "No results found — try a simpler name like 'brown rice' or 'chicken breast'."
+                        )
+                        st.session_state.last_result = None
+                    else:
+                        st.session_state.last_result = result
+                        st.session_state.last_input = food_input
+                        st.session_state.serving_qty = qty
+                        st.session_state.serving_unit = unit
+                except Exception as e:
+                    st.error(f"API error: {e}")
+                    st.session_state.last_result = None
 
 # ── Nutrition Results Card ────────────────────────────────────────────────────
 if st.session_state.last_result:
     r = st.session_state.last_result
 
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.markdown('<p class="section-title">📊 Nutrition Info</p>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<p class="section-title">📊 Nutrition Info</p>', unsafe_allow_html=True)
 
-    # Confidence / data quality warnings
-    if r.get("low_confidence"):
-        st.warning(
-            "⚠️ **Low confidence match** — the USDA result may not be exact. "
-            "Try rephrasing, e.g. *'rolled oats'* instead of *'oatmeal'*."
+        # Confidence / data quality warnings
+        if r.get("low_confidence"):
+            st.warning(
+                "⚠️ **Low confidence match** — the USDA result may not be exact. "
+                "Try rephrasing, e.g. *'rolled oats'* instead of *'oatmeal'*."
+            )
+        if r.get("suspicious_calories"):
+            st.error(
+                "🚨 **Unusual calorie value** — this may be branded product data. Numbers may not be accurate."
+            )
+
+        # Serving size controls
+        col_qty, col_unit = st.columns([1, 2])
+        serving_qty = col_qty.number_input(
+            "Amount",
+            min_value=0.1,
+            max_value=9999.0,
+            value=float(st.session_state.serving_qty),
+            step=0.5,
         )
-    if r.get("suspicious_calories"):
-        st.error(
-            "🚨 **Unusual calorie value** — this may be branded product data. Numbers may not be accurate."
+        unit_index = (
+            UNITS.index(st.session_state.serving_unit)
+            if st.session_state.serving_unit in UNITS
+            else 0
+        )
+        serving_unit = col_unit.selectbox("Unit", UNITS, index=unit_index)
+
+        st.session_state.serving_qty = serving_qty
+        st.session_state.serving_unit = serving_unit
+
+        grams = serving_qty * UNIT_TO_GRAMS.get(serving_unit, 1.0)
+        factor = grams / 100
+
+        # Food name + source badge + serving info
+        st.markdown(
+            f'<div class="result-food-name">{r["description"]}'
+            f'<span class="source-pill">{r.get("source", "")}</span></div>'
+            f'<div class="result-serving-info">Serving: {serving_qty:g} {serving_unit} = {grams:.0f} g</div>',
+            unsafe_allow_html=True,
         )
 
-    # Serving size controls
-    col_qty, col_unit = st.columns([1, 2])
-    serving_qty = col_qty.number_input(
-        "Amount",
-        min_value=0.1,
-        max_value=9999.0,
-        value=float(st.session_state.serving_qty),
-        step=0.5,
-    )
-    unit_index = (
-        UNITS.index(st.session_state.serving_unit)
-        if st.session_state.serving_unit in UNITS
-        else 0
-    )
-    serving_unit = col_unit.selectbox("Unit", UNITS, index=unit_index)
+        # Macro cards
+        cal   = round(r["calories"] * factor, 1)
+        carbs = round(r["carbs"]    * factor, 1)
+        prot  = round(r["protein"]  * factor, 1)
+        fat   = round(r["fat"]      * factor, 1)
+        fiber = round(r["fiber"]    * factor, 1)
 
-    st.session_state.serving_qty = serving_qty
-    st.session_state.serving_unit = serving_unit
-
-    grams = serving_qty * UNIT_TO_GRAMS.get(serving_unit, 1.0)
-    factor = grams / 100
-
-    # Food name + source badge + serving info
-    st.markdown(
-        f'<div class="result-food-name">{r["description"]}'
-        f'<span class="source-pill">{r.get("source", "")}</span></div>'
-        f'<div class="result-serving-info">Serving: {serving_qty:g} {serving_unit} = {grams:.0f} g</div>',
-        unsafe_allow_html=True,
-    )
-
-    # Macro cards
-    cal   = round(r["calories"] * factor, 1)
-    carbs = round(r["carbs"]    * factor, 1)
-    prot  = round(r["protein"]  * factor, 1)
-    fat   = round(r["fat"]      * factor, 1)
-    fiber = round(r["fiber"]    * factor, 1)
-
-    st.markdown(f"""
-    <div class="macro-grid">
-        <div class="macro-card macro-calories">
-            <div class="macro-value">{cal}</div>
-            <div class="macro-label">kcal</div>
+        st.markdown(f"""
+        <div class="macro-grid">
+            <div class="macro-card macro-calories">
+                <div class="macro-value">{cal}</div>
+                <div class="macro-label">kcal</div>
+            </div>
+            <div class="macro-card macro-carbs">
+                <div class="macro-value">{carbs}g</div>
+                <div class="macro-label">Carbs</div>
+            </div>
+            <div class="macro-card macro-protein">
+                <div class="macro-value">{prot}g</div>
+                <div class="macro-label">Protein</div>
+            </div>
+            <div class="macro-card macro-fat">
+                <div class="macro-value">{fat}g</div>
+                <div class="macro-label">Fat</div>
+            </div>
+            <div class="macro-card macro-fiber">
+                <div class="macro-value">{fiber}g</div>
+                <div class="macro-label">Fiber</div>
+            </div>
         </div>
-        <div class="macro-card macro-carbs">
-            <div class="macro-value">{carbs}g</div>
-            <div class="macro-label">Carbs</div>
-        </div>
-        <div class="macro-card macro-protein">
-            <div class="macro-value">{prot}g</div>
-            <div class="macro-label">Protein</div>
-        </div>
-        <div class="macro-card macro-fat">
-            <div class="macro-value">{fat}g</div>
-            <div class="macro-label">Fat</div>
-        </div>
-        <div class="macro-card macro-fiber">
-            <div class="macro-value">{fiber}g</div>
-            <div class="macro-label">Fiber</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    if st.button("➕ Add to Today's Log", type="primary"):
-        entry = {
-            "Food": f"{st.session_state.last_input} ({grams:.0f}g)",
-            "Calories (kcal)": cal,
-            "Carbs (g)": carbs,
-            "Protein (g)": prot,
-            "Fat (g)": fat,
-            "Fiber (g)": fiber,
-        }
-        st.session_state.food_log.append(entry)
-        st.success(f"✅ Added **{st.session_state.last_input}** ({grams:.0f}g) to your log!")
-
-    st.markdown('</div>', unsafe_allow_html=True)
+        if st.button("➕ Add to Today's Log", type="primary"):
+            entry = {
+                "Food": f"{st.session_state.last_input} ({grams:.0f}g)",
+                "Calories (kcal)": cal,
+                "Carbs (g)": carbs,
+                "Protein (g)": prot,
+                "Fat (g)": fat,
+                "Fiber (g)": fiber,
+            }
+            st.session_state.food_log.append(entry)
+            st.success(f"✅ Added **{st.session_state.last_input}** ({grams:.0f}g) to your log!")
 
 # ── Daily Food Log Card ───────────────────────────────────────────────────────
-st.markdown('<div class="section-card">', unsafe_allow_html=True)
-st.markdown('<p class="section-title">📋 Today\'s Food Log</p>', unsafe_allow_html=True)
+with st.container(border=True):
+    st.markdown('<p class="section-title">📋 Today\'s Food Log</p>', unsafe_allow_html=True)
 
-if st.session_state.food_log:
-    import pandas as pd
+    if st.session_state.food_log:
+        import pandas as pd
 
-    df = pd.DataFrame(st.session_state.food_log)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+        df = pd.DataFrame(st.session_state.food_log)
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
-    col_clear, _ = st.columns([1, 4])
-    with col_clear:
-        if st.button("🗑️ Clear Log", use_container_width=True):
-            st.session_state.food_log = []
-            st.session_state.last_result = None
-            st.rerun()
+        col_clear, _ = st.columns([1, 4])
+        with col_clear:
+            if st.button("🗑️ Clear Log", use_container_width=True):
+                st.session_state.food_log = []
+                st.session_state.last_result = None
+                st.rerun()
 
-    # ── Daily totals strip ────────────────────────────────────────────────────
-    total_cal    = round(df["Calories (kcal)"].sum(), 1)
-    total_carbs  = round(df["Carbs (g)"].sum(), 1)
-    total_protein = round(df["Protein (g)"].sum(), 1)
-    total_fat    = round(df["Fat (g)"].sum(), 1)
-    total_fiber  = round(df["Fiber (g)"].sum(), 1)
+        # ── Daily totals strip ────────────────────────────────────────────────
+        total_cal     = round(df["Calories (kcal)"].sum(), 1)
+        total_carbs   = round(df["Carbs (g)"].sum(), 1)
+        total_protein = round(df["Protein (g)"].sum(), 1)
+        total_fat     = round(df["Fat (g)"].sum(), 1)
+        total_fiber   = round(df["Fiber (g)"].sum(), 1)
 
-    st.markdown(f"""
-    <div class="totals-strip">
-        <div class="total-item">
-            <div class="t-val">{total_cal}</div>
-            <div class="t-lbl">kcal total</div>
+        st.markdown(f"""
+        <div class="totals-strip">
+            <div class="total-item">
+                <div class="t-val">{total_cal}</div>
+                <div class="t-lbl">kcal total</div>
+            </div>
+            <div class="total-item">
+                <div class="t-val">{total_carbs}g</div>
+                <div class="t-lbl">Carbs</div>
+            </div>
+            <div class="total-item">
+                <div class="t-val">{total_protein}g</div>
+                <div class="t-lbl">Protein</div>
+            </div>
+            <div class="total-item">
+                <div class="t-val">{total_fat}g</div>
+                <div class="t-lbl">Fat</div>
+            </div>
+            <div class="total-item">
+                <div class="t-val">{total_fiber}g</div>
+                <div class="t-lbl">Fiber</div>
+            </div>
         </div>
-        <div class="total-item">
-            <div class="t-val">{total_carbs}g</div>
-            <div class="t-lbl">Carbs</div>
+        """, unsafe_allow_html=True)
+
+        # ── Macro breakdown chart ─────────────────────────────────────────────
+        st.markdown('<p class="section-title" style="margin-top:20px">🥧 Macro Breakdown</p>', unsafe_allow_html=True)
+
+        carb_cal = total_carbs * 4
+        protein_cal = total_protein * 4
+        fat_cal = total_fat * 9
+        total_macro_cal = carb_cal + protein_cal + fat_cal
+
+        if total_macro_cal > 0:
+            carb_pct    = round(carb_cal    / total_macro_cal * 100, 1)
+            protein_pct = round(protein_cal / total_macro_cal * 100, 1)
+            fat_pct     = round(100 - carb_pct - protein_pct, 1)
+
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                name="Carbs",
+                x=[carb_pct], y=["Macros"],
+                orientation="h",
+                marker_color="#f9a825",
+                text=f"Carbs {carb_pct}%",
+                textposition="inside", insidetextanchor="middle",
+                textfont=dict(color="white", size=13, family="Inter"),
+            ))
+            fig.add_trace(go.Bar(
+                name="Protein",
+                x=[protein_pct], y=["Macros"],
+                orientation="h",
+                marker_color="#1976d2",
+                text=f"Protein {protein_pct}%",
+                textposition="inside", insidetextanchor="middle",
+                textfont=dict(color="white", size=13, family="Inter"),
+            ))
+            fig.add_trace(go.Bar(
+                name="Fat",
+                x=[fat_pct], y=["Macros"],
+                orientation="h",
+                marker_color="#8e24aa",
+                text=f"Fat {fat_pct}%",
+                textposition="inside", insidetextanchor="middle",
+                textfont=dict(color="white", size=13, family="Inter"),
+            ))
+            fig.update_layout(
+                barmode="stack",
+                xaxis=dict(title="% of Calories", range=[0, 100], gridcolor="#f0f0f0"),
+                yaxis=dict(showticklabels=False),
+                legend=dict(
+                    orientation="h", yanchor="bottom", y=1.05,
+                    xanchor="right", x=1,
+                    font=dict(family="Inter", size=12),
+                ),
+                height=160,
+                margin=dict(l=0, r=0, t=36, b=36),
+                paper_bgcolor="white",
+                plot_bgcolor="white",
+                font=dict(family="Inter"),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+    else:
+        st.markdown("""
+        <div class="food-log-empty">
+            <span class="empty-icon">🍽️</span>
+            Your log is empty — search for a food above and tap <strong>Add to Today's Log</strong>.
         </div>
-        <div class="total-item">
-            <div class="t-val">{total_protein}g</div>
-            <div class="t-lbl">Protein</div>
-        </div>
-        <div class="total-item">
-            <div class="t-val">{total_fat}g</div>
-            <div class="t-lbl">Fat</div>
-        </div>
-        <div class="total-item">
-            <div class="t-val">{total_fiber}g</div>
-            <div class="t-lbl">Fiber</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Macro breakdown chart ─────────────────────────────────────────────────
-    st.markdown('<p class="section-title" style="margin-top:20px">🥧 Macro Breakdown</p>', unsafe_allow_html=True)
-
-    carb_cal = total_carbs * 4
-    protein_cal = total_protein * 4
-    fat_cal = total_fat * 9
-    total_macro_cal = carb_cal + protein_cal + fat_cal
-
-    if total_macro_cal > 0:
-        carb_pct    = round(carb_cal    / total_macro_cal * 100, 1)
-        protein_pct = round(protein_cal / total_macro_cal * 100, 1)
-        fat_pct     = round(100 - carb_pct - protein_pct, 1)
-
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            name="Carbs",
-            x=[carb_pct], y=["Macros"],
-            orientation="h",
-            marker_color="#f9a825",
-            text=f"Carbs {carb_pct}%",
-            textposition="inside", insidetextanchor="middle",
-            textfont=dict(color="white", size=13, family="Inter"),
-        ))
-        fig.add_trace(go.Bar(
-            name="Protein",
-            x=[protein_pct], y=["Macros"],
-            orientation="h",
-            marker_color="#1976d2",
-            text=f"Protein {protein_pct}%",
-            textposition="inside", insidetextanchor="middle",
-            textfont=dict(color="white", size=13, family="Inter"),
-        ))
-        fig.add_trace(go.Bar(
-            name="Fat",
-            x=[fat_pct], y=["Macros"],
-            orientation="h",
-            marker_color="#8e24aa",
-            text=f"Fat {fat_pct}%",
-            textposition="inside", insidetextanchor="middle",
-            textfont=dict(color="white", size=13, family="Inter"),
-        ))
-        fig.update_layout(
-            barmode="stack",
-            xaxis=dict(title="% of Calories", range=[0, 100], gridcolor="#f0f0f0"),
-            yaxis=dict(showticklabels=False),
-            legend=dict(
-                orientation="h", yanchor="bottom", y=1.05,
-                xanchor="right", x=1,
-                font=dict(family="Inter", size=12),
-            ),
-            height=160,
-            margin=dict(l=0, r=0, t=36, b=36),
-            paper_bgcolor="white",
-            plot_bgcolor="white",
-            font=dict(family="Inter"),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-else:
-    st.markdown("""
-    <div class="food-log-empty">
-        <span class="empty-icon">🍽️</span>
-        Your log is empty — search for a food above and tap <strong>Add to Today's Log</strong>.
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown('</div>', unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("""
