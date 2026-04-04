@@ -584,8 +584,24 @@ if "calorie_goal" not in st.session_state:
     st.session_state.calorie_goal = 2000
 if "selected_meal" not in st.session_state:
     st.session_state.selected_meal = "🌅 Breakfast"
+if "exercise_log" not in st.session_state:
+    st.session_state.exercise_log = []
 
 MEALS = ["🌅 Breakfast", "☀️ Lunch", "🌙 Dinner", "🍎 Snack"]
+
+# Approximate kcal burned per minute for a ~70 kg person
+EXERCISES = {
+    "🏃 Running":            10,
+    "🚶 Walking":             4,
+    "🚴 Cycling":             8,
+    "🏊 Swimming":            9,
+    "💪 Strength Training":   5,
+    "🔥 HIIT":               12,
+    "🧘 Yoga / Stretching":   3,
+    "⚽ Sports / Games":       7,
+    "🪜 Stair Climbing":       9,
+    "💃 Dancing":              5,
+}
 MEAL_COLORS = {
     "🌅 Breakfast": "#fff3e0",
     "☀️ Lunch":     "#e3f2fd",
@@ -634,39 +650,39 @@ with st.container(border=True):
         )
         st.session_state.calorie_goal = calorie_goal
 
-    # Calculate consumed from log
-    consumed = round(
-        sum(e["Calories (kcal)"] for e in st.session_state.food_log), 1
-    )
-    goal = st.session_state.calorie_goal
-    pct = min(consumed / goal, 1.0) if goal > 0 else 0
+    # Calculate consumed from food log and burned from exercise log
+    consumed = round(sum(e["Calories (kcal)"] for e in st.session_state.food_log), 1)
+    burned   = round(sum(e["Calories Burned"] for e in st.session_state.exercise_log), 1)
+    net      = round(consumed - burned, 1)
+    goal     = st.session_state.calorie_goal
+    pct      = min(net / goal, 1.0) if goal > 0 else 0
     pct_display = min(round(pct * 100, 1), 100)
 
-    # Pick colour tier
+    # Pick colour tier based on net calories
     if pct < 0.75:
         bar_class = "green"
         remaining_class = "remaining-green"
         status_icon = "✅"
-        status_msg = f"{goal - consumed:.0f} kcal remaining"
+        status_msg = f"{goal - net:.0f} kcal remaining"
     elif pct < 1.0:
         bar_class = "yellow"
         remaining_class = "remaining-yellow"
         status_icon = "⚡"
-        status_msg = f"{goal - consumed:.0f} kcal remaining — almost there!"
+        status_msg = f"{goal - net:.0f} kcal remaining — almost there!"
     else:
         bar_class = "red"
         remaining_class = "remaining-red"
         status_icon = "🔴"
-        over = round(consumed - goal, 1)
-        status_msg = f"{over} kcal over goal"
+        status_msg = f"{net - goal:.0f} kcal over goal"
 
+    burned_note = f" · 🔥 {burned} burned" if burned > 0 else ""
     st.markdown(f"""
     <div class="goal-bar-wrap">
         <div class="goal-bar-fill {bar_class}" style="width:{pct_display}%"></div>
     </div>
     <div class="goal-stats">
         <span>{status_icon} <span class="{remaining_class}">{status_msg}</span></span>
-        <span><span class="consumed">{consumed}</span> / {goal} kcal</span>
+        <span><span class="consumed">{net}</span> / {goal} kcal net&nbsp;<span style="color:#888;font-size:0.78rem">({consumed} eaten{burned_note})</span></span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -790,6 +806,41 @@ if st.session_state.last_result:
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+        # Macro breakdown chart for this food item
+        item_carb_cal = carbs * 4
+        item_prot_cal = prot  * 4
+        item_fat_cal  = fat   * 9
+        item_total    = item_carb_cal + item_prot_cal + item_fat_cal
+        if item_total > 0:
+            cp = round(item_carb_cal / item_total * 100, 1)
+            pp = round(item_prot_cal / item_total * 100, 1)
+            fp = round(100 - cp - pp, 1)
+            fig_item = go.Figure()
+            for name, val, color in [
+                ("Carbs",   cp, "#f9a825"),
+                ("Protein", pp, "#1976d2"),
+                ("Fat",     fp, "#8e24aa"),
+            ]:
+                fig_item.add_trace(go.Bar(
+                    name=name, x=[val], y=[""], orientation="h",
+                    marker_color=color,
+                    text=f"{name} {val}%", textposition="inside",
+                    insidetextanchor="middle",
+                    textfont=dict(color="white", size=12, family="Inter"),
+                ))
+            fig_item.update_layout(
+                barmode="stack",
+                xaxis=dict(range=[0, 100], visible=False),
+                yaxis=dict(showticklabels=False),
+                legend=dict(orientation="h", yanchor="bottom", y=1.1,
+                            xanchor="right", x=1,
+                            font=dict(family="Inter", size=11)),
+                height=80, margin=dict(l=0, r=0, t=28, b=0),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(family="Inter"),
+            )
+            st.plotly_chart(fig_item, use_container_width=True)
 
         # Meal selector
         meal_idx = MEALS.index(st.session_state.selected_meal) if st.session_state.selected_meal in MEALS else 0
@@ -945,6 +996,54 @@ with st.container(border=True):
             Your log is empty — search for a food above and tap <strong>Add to Today's Log</strong>.
         </div>
         """, unsafe_allow_html=True)
+
+# ── Exercise Tracker Card ─────────────────────────────────────────────────────
+with st.container(border=True):
+    st.markdown('<p class="section-title">🏃 Exercise Tracker</p>', unsafe_allow_html=True)
+
+    col_ex, col_dur, col_add = st.columns([3, 2, 1])
+    with col_ex:
+        exercise = st.selectbox(
+            "Exercise", list(EXERCISES.keys()),
+            label_visibility="collapsed",
+        )
+    with col_dur:
+        duration = st.number_input(
+            "Minutes", min_value=1, max_value=300, value=30, step=5,
+            label_visibility="collapsed",
+        )
+    with col_add:
+        kcal_burned = round(EXERCISES[exercise] * duration, 1)
+        st.markdown(
+            f"<div style='padding-top:6px;font-size:0.85rem;color:#2d6a4f;"
+            f"font-weight:600'>≈ {kcal_burned} kcal</div>",
+            unsafe_allow_html=True,
+        )
+
+    if st.button("➕ Log Exercise", type="primary"):
+        st.session_state.exercise_log.append({
+            "Exercise": exercise,
+            "Duration (min)": duration,
+            "Calories Burned": kcal_burned,
+        })
+        st.success(f"✅ Logged **{exercise}** for {duration} min — ~{kcal_burned} kcal burned!")
+
+    if st.session_state.exercise_log:
+        import pandas as pd
+        ex_df = pd.DataFrame(st.session_state.exercise_log)
+        st.dataframe(ex_df, use_container_width=True, hide_index=True)
+
+        total_burned = round(ex_df["Calories Burned"].sum(), 1)
+        st.markdown(
+            f"<div style='text-align:right;font-size:0.85rem;color:#2d6a4f;"
+            f"font-weight:600;margin-top:4px'>🔥 Total burned today: {total_burned} kcal</div>",
+            unsafe_allow_html=True,
+        )
+        col_ex_clear, _ = st.columns([1, 4])
+        with col_ex_clear:
+            if st.button("🗑️ Clear Exercise Log", use_container_width=True):
+                st.session_state.exercise_log = []
+                st.rerun()
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("""
