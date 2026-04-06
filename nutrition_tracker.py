@@ -7,8 +7,9 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv()
-API_KEY = os.getenv("USDA_API_KEY")
-API_BASE = "https://api.nal.usda.gov/fdc/v1"
+API_KEY          = os.getenv("USDA_API_KEY")
+CALORIENINJAS_KEY = os.getenv("CALORIENINJAS_KEY", "")
+API_BASE         = "https://api.nal.usda.gov/fdc/v1"
 
 NUTRIENT_IDS = {"calories": 1008, "protein": 1003, "fat": 1004, "carbs": 1005, "fiber": 1079}
 CALORIE_IDS  = [1008, 2047]
@@ -185,6 +186,45 @@ def search_food(query: str):
         "suspicious_calories": calories > MAX_SANE_CALORIES,
         "low_confidence":     match_score < LOW_CONFIDENCE_THRESHOLD or not any_word_found,
     }
+
+
+# ── CalorieNinjas NLP search (primary) ───────────────────────────────────────
+
+def search_food_nlp(query: str) -> dict | None:
+    """Natural-language nutrition lookup via CalorieNinjas.
+    Returns per-100 g values + serving_g so the existing factor UI works."""
+    if not CALORIENINJAS_KEY or CALORIENINJAS_KEY.startswith("your_"):
+        return None
+    try:
+        resp = requests.get(
+            "https://api.calorieninjas.com/v1/nutrition",
+            headers={"X-Api-Key": CALORIENINJAS_KEY},
+            params={"query": query},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        items = resp.json().get("items", [])
+        if not items:
+            return None
+        total_g = sum(i.get("serving_size_g", 100) for i in items) or 100
+        f = 100 / total_g          # normalise to per-100 g
+        names = " + ".join(i["name"].title() for i in items)
+        return {
+            "description":         names,
+            "calories":            round(sum(i.get("calories", 0)                  for i in items) * f, 1),
+            "protein":             round(sum(i.get("protein_g", 0)                 for i in items) * f, 1),
+            "carbs":               round(sum(i.get("carbohydrates_total_g", 0)     for i in items) * f, 1),
+            "fat":                 round(sum(i.get("fat_total_g", 0)               for i in items) * f, 1),
+            "fiber":               round(sum(i.get("fiber_g", 0)                   for i in items) * f, 1),
+            "sugar":               round(sum(i.get("sugar_g", 0)                   for i in items) * f, 1),
+            "sodium":              round(sum(i.get("sodium_mg", 0)                 for i in items) * f, 0),
+            "serving_g":           round(total_g, 1),
+            "source":              "🟢 CalorieNinjas NLP",
+            "low_confidence":      False,
+            "suspicious_calories": False,
+        }
+    except Exception:
+        return None
 
 
 # ── UI helpers ────────────────────────────────────────────────────────────────
@@ -392,6 +432,21 @@ hr { border-color:#dce8dc !important; margin:20px 0 !important; }
 
 # ── Session state ─────────────────────────────────────────────────────────────
 _ss = st.session_state
+
+# Auth
+if "logged_in"    not in _ss: _ss.logged_in    = False
+if "current_user" not in _ss: _ss.current_user = ""
+if "users_db"     not in _ss:
+    _ss.users_db = {
+        "demo@nutripulse.app": {
+            "password": "demo123",
+            "name": "Alex (Demo)", "age": 28,
+            "gender": "Female",   "weight": 62.0,
+            "height": 165.0,      "activity": "Moderately active (3-5x/week)",
+            "calorie_goal": 1800,
+        }
+    }
+
 if "food_log"      not in _ss: _ss.food_log      = []
 if "exercise_log"  not in _ss: _ss.exercise_log  = []
 if "last_result"   not in _ss: _ss.last_result   = None
@@ -415,13 +470,88 @@ if "custom_goals"  not in _ss:
     _ss.custom_goals = {"protein": 50, "carbs": 300, "fat": 65, "fiber": 28}
 
 
+# ── Login / Register page ─────────────────────────────────────────────────────
+if not _ss.logged_in:
+    st.markdown("""
+    <div class="hero-banner" style="text-align:center">
+        <h1>🥗 NutriPulse</h1>
+        <p>Your personal nutrition & fitness tracker</p>
+    </div>""", unsafe_allow_html=True)
+
+    _, mid, _ = st.columns([1, 1.6, 1])
+    with mid:
+        lt, rt = st.tabs(["🔐 Login", "📝 Register"])
+
+        with lt:
+            l_email = st.text_input("Email", placeholder="you@email.com", key="l_email")
+            l_pass  = st.text_input("Password", type="password", key="l_pass")
+            lc1, lc2 = st.columns(2)
+            if lc1.button("Login", type="primary", use_container_width=True):
+                db = _ss.users_db
+                if l_email in db and db[l_email]["password"] == l_pass:
+                    _ss.logged_in = True
+                    _ss.current_user = l_email
+                    u = db[l_email]
+                    _ss.profile = {k: u[k] for k in
+                                   ["name","age","gender","weight","height","activity"] if k in u}
+                    _ss.calorie_goal = u.get("calorie_goal", 2000)
+                    st.rerun()
+                else:
+                    st.error("Incorrect email or password.")
+            if lc2.button("Demo Login", use_container_width=True):
+                _ss.logged_in = True
+                _ss.current_user = "demo@nutripulse.app"
+                u = _ss.users_db["demo@nutripulse.app"]
+                _ss.profile = {k: u[k] for k in
+                               ["name","age","gender","weight","height","activity"]}
+                _ss.calorie_goal = u.get("calorie_goal", 1800)
+                st.rerun()
+            st.caption("Demo account → `demo@nutripulse.app` / `demo123`")
+
+        with rt:
+            r_name  = st.text_input("Your name", key="r_name")
+            r_email = st.text_input("Email", placeholder="you@email.com", key="r_email")
+            r_pass  = st.text_input("Password", type="password", key="r_pass")
+            r_pass2 = st.text_input("Confirm password", type="password", key="r_pass2")
+            if st.button("Create Account", type="primary", use_container_width=True):
+                if not r_name or not r_email or not r_pass:
+                    st.error("Please fill all fields.")
+                elif r_pass != r_pass2:
+                    st.error("Passwords do not match.")
+                elif r_email in _ss.users_db:
+                    st.error("Email already registered.")
+                else:
+                    _ss.users_db[r_email] = {
+                        "password": r_pass, "name": r_name,
+                        "age": 25, "gender": "Female",
+                        "weight": 65.0, "height": 165.0,
+                        "activity": "Moderately active (3-5x/week)",
+                        "calorie_goal": 2000,
+                    }
+                    _ss.logged_in = True
+                    _ss.current_user = r_email
+                    _ss.profile["name"] = r_name
+                    st.success(f"Welcome, {r_name}!")
+                    st.rerun()
+    st.stop()
+
 # ── Hero Banner ───────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="hero-banner">
-    <h1>🥗 NutriPulse</h1>
-    <p>Track what you eat · Powered by USDA FoodData Central</p>
-</div>
-""", unsafe_allow_html=True)
+user_name = _ss.profile.get("name", "") or _ss.current_user.split("@")[0].title()
+hc1, hc2 = st.columns([5, 1])
+with hc1:
+    st.markdown(f"""
+    <div class="hero-banner">
+        <h1>🥗 NutriPulse</h1>
+        <p>Welcome back, <strong>{user_name}</strong> · Powered by USDA + CalorieNinjas</p>
+    </div>""", unsafe_allow_html=True)
+with hc2:
+    st.markdown("<div style='padding-top:18px'>", unsafe_allow_html=True)
+    if st.button("Logout", use_container_width=True):
+        for k in ["logged_in","current_user","food_log","exercise_log","last_result",
+                  "last_input","water_ml","recent_foods","history","food_input"]:
+            if k in _ss: del _ss[k]
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
 
 if not API_KEY:
     st.error("**USDA API key not found.** Create a `.env` file with `USDA_API_KEY=your_key`.")
@@ -561,19 +691,27 @@ with tab1:
             if not food_input.strip():
                 st.warning("Please enter a food item first.")
             else:
-                qty, unit, food_name = parse_serving(food_input)
-                with st.spinner(f"Looking up '{food_name}'…"):
+                with st.spinner(f"Looking up '{food_input}'…"):
                     try:
-                        result = search_food(food_name)
-                        if result is None:
-                            st.warning("No results found — try a simpler name.")
-                            _ss.last_result = None
+                        # Primary: CalorieNinjas NLP (pass full query)
+                        result = search_food_nlp(food_input)
+                        if result is not None:
+                            serving_g = result.get("serving_g", 100.0)
+                            _ss.serving_qty  = serving_g
+                            _ss.serving_unit = "g"
                         else:
-                            _ss.last_result   = result
-                            _ss.last_input    = food_input
-                            _ss.serving_qty   = qty
-                            _ss.serving_unit  = unit
-                            # Add to recent foods (max 10, no duplicates)
+                            # Fallback: USDA keyword search
+                            qty, unit, food_name = parse_serving(food_input)
+                            result = search_food(food_name)
+                            if result is None:
+                                st.warning("No results found — try a simpler name.")
+                                _ss.last_result = None
+                            else:
+                                _ss.serving_qty  = qty * UNIT_TO_GRAMS.get(unit, 1.0)
+                                _ss.serving_unit = "g"
+                        if result is not None:
+                            _ss.last_result = result
+                            _ss.last_input  = food_input
                             _ss.recent_foods = [(food_input, result)] + [
                                 x for x in _ss.recent_foods if x[0] != food_input
                             ][:9]
@@ -592,10 +730,11 @@ with tab1:
                 st.error("🚨 **Unusual calorie value** — numbers may not be accurate.")
 
             col_qty, col_unit = st.columns([1, 2])
-            serving_qty = col_qty.number_input("Amount", min_value=0.1, max_value=9999.0,
-                                               value=float(_ss.serving_qty), step=0.5)
-            unit_index  = UNITS.index(_ss.serving_unit) if _ss.serving_unit in UNITS else 0
-            serving_unit = col_unit.selectbox("Unit", UNITS, index=unit_index)
+            serving_qty  = col_qty.number_input("Amount", min_value=0.1, max_value=9999.0,
+                                                value=float(_ss.serving_qty), step=0.5)
+            unit_options = ["g"] + [u for u in UNITS if u != "g"]
+            unit_index   = unit_options.index(_ss.serving_unit) if _ss.serving_unit in unit_options else 0
+            serving_unit = col_unit.selectbox("Unit", unit_options, index=unit_index)
             _ss.serving_qty  = serving_qty
             _ss.serving_unit = serving_unit
 
@@ -623,6 +762,18 @@ with tab1:
                 <div class="macro-card macro-fat"><div class="macro-value">{fat}g</div><div class="macro-label">Fat</div></div>
                 <div class="macro-card macro-fiber"><div class="macro-value">{fiber}g</div><div class="macro-label">Fiber</div></div>
             </div>""", unsafe_allow_html=True)
+
+            # Sugar + sodium (CalorieNinjas only)
+            sugar  = round(r.get("sugar", 0)  * factor, 1)
+            sodium = round(r.get("sodium", 0) * factor, 0)
+            if sugar or sodium:
+                st.markdown(
+                    f'<div style="display:flex;gap:14px;margin:-6px 0 8px;flex-wrap:wrap">'
+                    f'<span style="font-size:0.8rem;color:#888">🍬 Sugar: <strong>{sugar}g</strong></span>'
+                    f'<span style="font-size:0.8rem;color:#888">🧂 Sodium: <strong>{sodium}mg</strong></span>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
 
             fig_item = macro_bar_fig(carbs, prot, fat)
             if fig_item:
