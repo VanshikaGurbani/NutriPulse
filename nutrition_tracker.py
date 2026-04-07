@@ -433,20 +433,6 @@ hr { border-color:#dce8dc !important; margin:20px 0 !important; }
 # ── Session state ─────────────────────────────────────────────────────────────
 _ss = st.session_state
 
-# Auth
-if "logged_in"    not in _ss: _ss.logged_in    = False
-if "current_user" not in _ss: _ss.current_user = ""
-if "users_db"     not in _ss:
-    _ss.users_db = {
-        "demo@nutripulse.app": {
-            "password": "demo123",
-            "name": "Alex (Demo)", "age": 28,
-            "gender": "Female",   "weight": 62.0,
-            "height": 165.0,      "activity": "Moderately active (3-5x/week)",
-            "calorie_goal": 1800,
-        }
-    }
-
 if "food_log"      not in _ss: _ss.food_log      = []
 if "exercise_log"  not in _ss: _ss.exercise_log  = []
 if "last_result"   not in _ss: _ss.last_result   = None
@@ -470,88 +456,12 @@ if "custom_goals"  not in _ss:
     _ss.custom_goals = {"protein": 50, "carbs": 300, "fat": 65, "fiber": 28}
 
 
-# ── Login / Register page ─────────────────────────────────────────────────────
-if not _ss.logged_in:
-    st.markdown("""
-    <div class="hero-banner" style="text-align:center">
-        <h1>🥗 NutriPulse</h1>
-        <p>Your personal nutrition & fitness tracker</p>
-    </div>""", unsafe_allow_html=True)
-
-    _, mid, _ = st.columns([1, 1.6, 1])
-    with mid:
-        lt, rt = st.tabs(["🔐 Login", "📝 Register"])
-
-        with lt:
-            l_email = st.text_input("Email", placeholder="you@email.com", key="l_email")
-            l_pass  = st.text_input("Password", type="password", key="l_pass")
-            lc1, lc2 = st.columns(2)
-            if lc1.button("Login", type="primary", use_container_width=True):
-                db = _ss.users_db
-                if l_email in db and db[l_email]["password"] == l_pass:
-                    _ss.logged_in = True
-                    _ss.current_user = l_email
-                    u = db[l_email]
-                    _ss.profile = {k: u[k] for k in
-                                   ["name","age","gender","weight","height","activity"] if k in u}
-                    _ss.calorie_goal = u.get("calorie_goal", 2000)
-                    st.rerun()
-                else:
-                    st.error("Incorrect email or password.")
-            if lc2.button("Demo Login", use_container_width=True):
-                _ss.logged_in = True
-                _ss.current_user = "demo@nutripulse.app"
-                u = _ss.users_db["demo@nutripulse.app"]
-                _ss.profile = {k: u[k] for k in
-                               ["name","age","gender","weight","height","activity"]}
-                _ss.calorie_goal = u.get("calorie_goal", 1800)
-                st.rerun()
-            st.caption("Demo account → `demo@nutripulse.app` / `demo123`")
-
-        with rt:
-            r_name  = st.text_input("Your name", key="r_name")
-            r_email = st.text_input("Email", placeholder="you@email.com", key="r_email")
-            r_pass  = st.text_input("Password", type="password", key="r_pass")
-            r_pass2 = st.text_input("Confirm password", type="password", key="r_pass2")
-            if st.button("Create Account", type="primary", use_container_width=True):
-                if not r_name or not r_email or not r_pass:
-                    st.error("Please fill all fields.")
-                elif r_pass != r_pass2:
-                    st.error("Passwords do not match.")
-                elif r_email in _ss.users_db:
-                    st.error("Email already registered.")
-                else:
-                    _ss.users_db[r_email] = {
-                        "password": r_pass, "name": r_name,
-                        "age": 25, "gender": "Female",
-                        "weight": 65.0, "height": 165.0,
-                        "activity": "Moderately active (3-5x/week)",
-                        "calorie_goal": 2000,
-                    }
-                    _ss.logged_in = True
-                    _ss.current_user = r_email
-                    _ss.profile["name"] = r_name
-                    st.success(f"Welcome, {r_name}!")
-                    st.rerun()
-    st.stop()
-
 # ── Hero Banner ───────────────────────────────────────────────────────────────
-user_name = _ss.profile.get("name", "") or _ss.current_user.split("@")[0].title()
-hc1, hc2 = st.columns([5, 1])
-with hc1:
-    st.markdown(f"""
-    <div class="hero-banner">
-        <h1>🥗 NutriPulse</h1>
-        <p>Welcome back, <strong>{user_name}</strong> · Powered by USDA + CalorieNinjas</p>
-    </div>""", unsafe_allow_html=True)
-with hc2:
-    st.markdown("<div style='padding-top:18px'>", unsafe_allow_html=True)
-    if st.button("Logout", use_container_width=True):
-        for k in ["logged_in","current_user","food_log","exercise_log","last_result",
-                  "last_input","water_ml","recent_foods","history","food_input"]:
-            if k in _ss: del _ss[k]
-        st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+st.markdown("""
+<div class="hero-banner">
+    <h1>🥗 NutriPulse</h1>
+    <p>Track what you eat · Powered by USDA + CalorieNinjas</p>
+</div>""", unsafe_allow_html=True)
 
 if not API_KEY:
     st.error("**USDA API key not found.** Create a `.env` file with `USDA_API_KEY=your_key`.")
