@@ -7,3 +7,5 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 node_modules/
+benchmark/cache_ops/
+benchmark/labeling_sheet*.csv

@@ -60,3 +60,17 @@ def kcal_per_100g(food: dict):
 
 __all__ = ["apis", "matching", "stats", "setup_cache", "read_csv", "write_csv", "parse_ids",
            "load_queries", "file_sha", "kcal_per_100g", "ROOT", "BENCH", "CACHE_DIR", "SEED"]
+
+
+def update_section(name: str, body: str, path=None):
+    """Replace (or append) a marked section of results.md so each script owns its own block."""
+    path = path or (BENCH / "results.md")
+    start, end = f"<!-- {name}:start -->", f"<!-- {name}:end -->"
+    text = path.read_text(encoding="utf-8") if path.exists() else "# Benchmark results\n"
+    block = f"{start}\n{body.strip()}\n{end}"
+    if start in text and end in text:
+        head, rest = text.split(start, 1)
+        text = head + block + rest.split(end, 1)[1]
+    else:
+        text = text.rstrip() + "\n\n" + block + "\n"
+    path.write_text(text, encoding="utf-8")
