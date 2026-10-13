@@ -39,7 +39,8 @@ def configure_cache(cache: DiskCache | None) -> None:
 
 
 def usda_key() -> str | None:
-    return os.getenv("USDA_API_KEY")
+    key = os.getenv("USDA_API_KEY")
+    return None if not key or key.startswith("your_") else key
 
 
 def calorieninjas_key() -> str:

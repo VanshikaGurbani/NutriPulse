@@ -118,3 +118,8 @@ def test_call_budget_blocks_live_calls_but_not_cache_hits(monkeypatch, tmp_path)
             apis.nlp_items("beans")                      # must not be swallowed as "no result"
     finally:
         apis.set_call_budget(None)
+
+
+def test_template_placeholder_keys_count_as_missing(monkeypatch):
+    monkeypatch.setenv("USDA_API_KEY", "your_usda_api_key_here")
+    assert apis.usda_key() is None
