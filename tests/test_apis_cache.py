@@ -103,3 +103,18 @@ def test_calorieninjas_errors_return_none(monkeypatch):
     assert apis.search_food_nlp("rice") is None
     fake_get(monkeypatch, {"items": [{"serving_size_g": 100}]})   # missing "name"
     assert apis.search_food_nlp("rice") is None
+
+
+def test_call_budget_blocks_live_calls_but_not_cache_hits(monkeypatch, tmp_path):
+    fake_get(monkeypatch, {"foods": []})
+    apis.configure_cache(DiskCache(tmp_path))
+    apis.set_call_budget(1)
+    try:
+        apis.usda_fetch("rice", None)
+        apis.usda_fetch("rice", None)                    # cached: allowed
+        with pytest.raises(apis.BudgetExceeded):
+            apis.usda_fetch("beans", None)               # would be 2nd live call
+        with pytest.raises(apis.BudgetExceeded):
+            apis.nlp_items("beans")                      # must not be swallowed as "no result"
+    finally:
+        apis.set_call_budget(None)

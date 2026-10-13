@@ -18,6 +18,17 @@ TIMEOUT_S = 10
 NUTRIENT_IDS = {"calories": 1008, "protein": 1003, "fat": 1004, "carbs": 1005, "fiber": 1079}
 
 _disk_cache: DiskCache | None = None
+_call_budget: int | None = None
+
+
+class BudgetExceeded(RuntimeError):
+    """Raised before a live request would exceed the configured call budget."""
+
+
+def set_call_budget(max_live_calls: int | None) -> None:
+    """Cap live (uncached) requests for this process; None removes the cap."""
+    global _call_budget
+    _call_budget = max_live_calls
 
 
 def configure_cache(cache: DiskCache | None) -> None:
@@ -52,6 +63,9 @@ def _get_json(service: str, url: str, params: dict, headers: dict | None = None)
         if hit is not None:
             stats.record_hit()
             return hit
+    if _call_budget is not None and stats.api_calls >= _call_budget:
+        raise BudgetExceeded(f"live API call budget of {_call_budget} reached; "
+                             "re-run with a higher --max-calls only after confirming quota")
     t0 = time.perf_counter()
     resp = _http.get(url, params=params, headers=headers, timeout=TIMEOUT_S)
     stats.record_call((time.perf_counter() - t0) * 1000)
@@ -82,6 +96,8 @@ def nlp_items(query: str) -> list | None:
     try:
         data = _get_json("calorieninjas", CALORIENINJAS_URL, {"query": query},
                          headers={"X-Api-Key": key})
+    except BudgetExceeded:
+        raise
     except Exception:
         return None
     return data.get("items", []) or None
