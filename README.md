@@ -4,6 +4,7 @@
 
 ### Your smart, real-time nutrition & fitness tracker
 
+[![CI](https://github.com/vanshikagurbani/nutripulse/actions/workflows/ci.yml/badge.svg)](https://github.com/vanshikagurbani/nutripulse/actions/workflows/ci.yml)
 [![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-nutripulse.streamlit.app-3cb371?style=for-the-badge)](https://nutripulse.streamlit.app/)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.48+-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io)
