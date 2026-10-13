@@ -2,3 +2,8 @@
 venv/
 __pycache__/
 *.pyc
+*.sqlite
+*.db
+.pytest_cache/
+.ruff_cache/
+node_modules/
