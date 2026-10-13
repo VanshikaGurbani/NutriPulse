@@ -51,7 +51,24 @@ def populated_flow(page, out, vp_name):
     shot(page, out, "history-saved", vp_name)
 
 
-def run(out_dir):
+def populated_flow_after(page, out, vp_name):
+    """AFTER-version flow: Enter-submit a multi-ingredient search, add it, then capture the populated tabs."""
+    open_tab(page, TABS["today"])
+    page.get_by_label("Food search").fill("2 cups white rice and carrots")
+    page.keyboard.press("Enter")
+    page.get_by_text("Ingredients found").first.wait_for(timeout=20000)
+    shot(page, out, "today-result", vp_name)
+    page.get_by_role("button", name="Add to ").first.click()
+    page.wait_for_timeout(1500)
+    shot(page, out, "today-logged", vp_name)
+    open_tab(page, TABS["insights"])
+    shot(page, out, "insights-logged", vp_name)
+    open_tab(page, TABS["history"])
+    page.wait_for_timeout(500)
+    shot(page, out, "history-saved", vp_name)
+
+
+def run(out_dir, version="before"):
     out = ROOT / out_dir
     out.mkdir(parents=True, exist_ok=True)
     with running_app() as url, sync_playwright() as pw:
@@ -64,7 +81,7 @@ def run(out_dir):
             for key, label in TABS.items():
                 open_tab(page, label)
                 shot(page, out, f"{key}-empty", vp_name)
-            populated_flow(page, out, vp_name)
+            (populated_flow if version == "before" else populated_flow_after)(page, out, vp_name)
             ctx.close()
         browser.close()
     print("saved to", out)
@@ -72,4 +89,4 @@ def run(out_dir):
 
 if __name__ == "__main__":
     sys.path.insert(0, str(ROOT))
-    run(sys.argv[1] if len(sys.argv) > 1 else "docs/ux/before")
+    run(sys.argv[1] if len(sys.argv) > 1 else "docs/ux/before", sys.argv[2] if len(sys.argv) > 2 else "before")

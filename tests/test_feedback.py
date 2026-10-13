@@ -27,3 +27,9 @@ def test_log_and_rate():
 def test_rejects_bad_value():
     with pytest.raises(ValueError):
         feedback.log_feedback("x", "usda", 1, 1.0, 0)
+
+
+def test_log_choice_counts():
+    assert feedback.choice_count() == 0
+    feedback.log_choice("oatmeal", "Oatmeal", 1, 2, 3)
+    assert feedback.choice_count() == 1

@@ -49,22 +49,26 @@ def lookup_meal(query: str, parallel: bool = True) -> dict | None:
         if out:
             return {"path": "calorieninjas", "items": out}
     qty, unit, name = matching.parse_serving(query)
-    result = matching.search_food(name, parallel=parallel)
-    if result is None:
+    ranked = matching.ranked_candidates(name, 5, parallel)
+    if not ranked:
         return None
-    return {"path": "usda", "items": [usda_item(result, name, qty * matching.UNIT_TO_GRAMS.get(unit, 1.0))]}
+    food, score = ranked[0]
+    item = usda_item(matching.to_result(food, score, name), name, qty * matching.UNIT_TO_GRAMS.get(unit, 1.0))
+    item["alternatives"] = [_alt_record(f, sc, name) for f, sc in ranked]     # free: same candidate list, no extra API call
+    return {"path": "usda", "items": [item]}
+
+
+def _alt_record(food: dict, score: float, name: str) -> dict:
+    r = matching.to_result(food, score, name)
+    return {"fdc_id": r["fdc_id"], "name": r["description"], "score": r["score"], "source_detail": r["source"],
+            "confidence": usda_confidence(r),
+            "per100": {"kcal": r["calories"], "protein": r["protein"], "carbs": r["carbs"], "fat": r["fat"],
+                       "fiber": r["fiber"], "sugar": 0.0, "sodium": 0.0}}
 
 
 def alternatives(name: str, k: int = 5, parallel: bool = True) -> list:
     """Top-k USDA candidates for one ingredient name, best first, as swappable per-100 g records."""
-    out = []
-    for food, score in matching.ranked_candidates(name, k, parallel):
-        r = matching.to_result(food, score, name)
-        out.append({"fdc_id": r["fdc_id"], "name": r["description"], "score": r["score"], "source_detail": r["source"],
-                    "confidence": usda_confidence(r),
-                    "per100": {"kcal": r["calories"], "protein": r["protein"], "carbs": r["carbs"], "fat": r["fat"],
-                               "fiber": r["fiber"], "sugar": 0.0, "sodium": 0.0}})
-    return out
+    return [_alt_record(f, sc, name) for f, sc in matching.ranked_candidates(name, k, parallel)]
 
 
 def swap_match(item: dict, alt: dict) -> dict:

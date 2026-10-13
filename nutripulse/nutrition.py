@@ -59,3 +59,37 @@ def smart_tips(protein, fiber, cal, goal_cal, water_ml, meals_used):
         tips.append(("✅", "On track!" if cal > 0 else "Start logging",
                      "Your nutrition looks balanced today!" if cal > 0 else "Search for a food above to get started."))
     return tips
+
+
+# ── units and goal helpers (used by onboarding and the profile) ──────────────
+
+GOAL_ADJUSTMENT = {"lose": -500, "maintain": 0, "gain": 300}   # kcal/day relative to TDEE; coarse, widely used starting points
+MACRO_SPLIT = {"protein": 0.20, "carbs": 0.50, "fat": 0.30}     # share of calories; a neutral starting suggestion, not advice
+
+
+def lb_to_kg(lb: float) -> float:
+    return lb * 0.45359237
+
+
+def kg_to_lb(kg: float) -> float:
+    return kg / 0.45359237
+
+
+def ftin_to_cm(feet: float, inches: float) -> float:
+    return (feet * 12 + inches) * 2.54
+
+
+def cm_to_ftin(cm: float) -> tuple:
+    total_in = round(cm / 2.54)
+    return total_in // 12, total_in % 12
+
+
+def suggest_goal(tdee: int, objective: str) -> int:
+    """Calorie target from TDEE and an objective (lose/maintain/gain), rounded to 10 kcal and never below 1200."""
+    return max(1200, int(round((tdee + GOAL_ADJUSTMENT[objective]) / 10.0)) * 10)
+
+
+def suggest_macros(kcal: float) -> dict:
+    """Gram targets from a calorie target using MACRO_SPLIT (4/4/9 kcal per g) and a 25 g fibre floor guideline."""
+    return {"protein": round(kcal * MACRO_SPLIT["protein"] / 4), "carbs": round(kcal * MACRO_SPLIT["carbs"] / 4),
+            "fat": round(kcal * MACRO_SPLIT["fat"] / 9), "fiber": 25}

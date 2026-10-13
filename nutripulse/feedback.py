@@ -48,3 +48,24 @@ def summary() -> dict:
     total = up + down
     return {"up": up, "down": down, "total": total, "confirmed_rate": (up / total) if total else None,
             "by_source": {s: {"up": u, "total": t} for s, u, t in by_source}, "recent_down": recent_down}
+
+
+def _choices_table(conn):
+    conn.execute("""CREATE TABLE IF NOT EXISTS match_choice (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, query TEXT NOT NULL, ingredient TEXT,
+        original_fdc_id INTEGER, chosen_fdc_id INTEGER, chosen_rank INTEGER)""")
+
+
+def log_choice(query: str, ingredient: str, original_fdc_id, chosen_fdc_id, chosen_rank: int) -> None:
+    """A person replaced the app's match with another candidate. chosen_rank is 1-based in the scorer's top list.
+    These rows are labelled by real use (for future evaluation), not benchmark results."""
+    with _connect() as conn:
+        _choices_table(conn)
+        conn.execute("INSERT INTO match_choice (ts, query, ingredient, original_fdc_id, chosen_fdc_id, chosen_rank) VALUES (?,?,?,?,?,?)",
+                     (datetime.datetime.now().isoformat(timespec="seconds"), query, ingredient, original_fdc_id, chosen_fdc_id, chosen_rank))
+
+
+def choice_count() -> int:
+    with _connect() as conn:
+        _choices_table(conn)
+        return conn.execute("SELECT COUNT(*) FROM match_choice").fetchone()[0]
