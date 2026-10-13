@@ -2,7 +2,7 @@
 
 # 🥗 NutriPulse
 
-### Your smart, real-time nutrition & fitness tracker
+### A phone-friendly nutrition and fitness tracker
 
 [![CI](https://github.com/vanshikagurbani/nutripulse/actions/workflows/ci.yml/badge.svg)](https://github.com/vanshikagurbani/nutripulse/actions/workflows/ci.yml)
 [![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-nutripulse.streamlit.app-3cb371?style=for-the-badge)](https://nutripulse.streamlit.app/)
@@ -17,187 +17,188 @@
 
 ## ✨ What is NutriPulse?
 
-NutriPulse is a full-featured, beautifully designed nutrition tracker built with **Streamlit** and powered by two nutrition APIs. Type natural phrases like *"2 cups white rice with carrots"* and instantly get accurate macro breakdowns, calorie tracking, exercise logging, and personalized insights — all in one clean interface.
+NutriPulse is a nutrition tracker built with **Streamlit** and two nutrition APIs. Type a natural phrase like *"2 cups white rice with carrots"* and it is split into ingredients, each with its own amount, calories and macros, which you can adjust before logging. It also tracks water and exercise, keeps your history, and shows insights against your own goals.
 
-> Built as a personal project, NutriPulse demonstrates real-world API integration, data visualization, and modern UI design patterns within a Python web app.
+> Built as a personal project, NutriPulse demonstrates API integration, a tested matching algorithm, a measured evaluation, and a UX redesign checked with before/after measurements.
 
----
+![Logging a food on a phone: type, search, review ingredients, add](docs/ux/logging-flow.gif)
 
-## 🖼️ App Preview
+| Today (phone) | Today (desktop) |
+|---|---|
+| ![Today on a 375 px phone with the ingredient breakdown](docs/ux/after/today-result-fold-375.png) | ![Today on a 1280 px desktop](docs/ux/after/today-result-fold-1280.png) |
 
-| Today's Log | Insights | Profile & Goals |
-|---|---|---|
-| Calorie goal + macro bars | Nutrition Grade A–F | TDEE calculator |
-| Water intake tracker | Nutrient radar chart | Custom macro targets |
-| NLP food search | Meal composition donut | Recent foods history |
-| Exercise tracker | Smart suggestions | Calorie trend chart |
+Before/after screenshots of every tab at 375 px and 1280 px are in [`docs/ux/before`](docs/ux/before) and [`docs/ux/after`](docs/ux/after).
 
 ---
 
 ## 🚀 Features
 
-### 🍽️ Tab 1 — Today
-| Feature | Description |
+| Area | What you get |
 |---|---|
-| **Calorie Goal** | Set a daily target; colour-coded progress bar goes green → yellow → red |
-| **Macro Mini-Bars** | Live protein / carbs / fat / fiber progress vs your custom goals |
-| **Water Tracker** | Log by glass, 500 ml, or 1 L; adjustable daily goal |
-| **NLP Food Search** | Type *"1.5 tbsp peanut butter"* or *"bowl of oatmeal with banana"* — it just works |
-| **Dual API** | CalorieNinjas NLP is primary; USDA FoodData Central is automatic fallback |
-| **Inline Macros** | Full nutrition breakdown (kcal, carbs, protein, fat, fiber, sugar, sodium) visible *before* adding to log |
-| **Meal Categories** | Breakfast · Lunch · Dinner · Snack — colour-coded groupings |
-| **Food Log** | Grouped by meal with per-meal calorie totals + stacked macro bar |
-| **Export CSV** | Download today's full log as a spreadsheet |
-| **Exercise Tracker** | 10 activity types × MET-based calorie burn; net calories auto-updated |
-
-### 📊 Tab 2 — Insights
-| Feature | Description |
-|---|---|
-| **Nutrition Grade** | A–F letter grade based on calorie adherence, protein, fiber & macro balance |
-| **Smart Suggestions** | Rule-based tips for low protein, low fiber, dehydration, over-goal calories |
-| **Radar Chart** | Spider chart — today's intake vs your 5 custom nutrient targets |
-| **Meal Composition** | Interactive donut chart — % of daily calories per meal type |
-| **Food Comparison** | Search two foods side-by-side; grouped bar chart + diff table |
-
-### 👤 Tab 3 — Profile & Goals
-| Feature | Description |
-|---|---|
-| **User Profile** | Name, age, gender, weight, height, activity level |
-| **TDEE Calculator** | Mifflin-St Jeor BMR × activity multiplier; one-click "Apply as goal" |
-| **Custom Targets** | Set personal goals for protein, carbs, fat, and fiber |
-| **Recent Foods** | Your last 10 searches for quick re-use |
-
-### 📅 Tab 4 — History
-| Feature | Description |
-|---|---|
-| **Daily Snapshots** | Save today's totals with one click |
-| **History Table** | All saved days in a clean data table |
-| **Export History** | Download full history CSV |
-| **Calorie Trend** | Line chart showing calorie intake over saved days |
+| **Search first** | The search box is the first thing on Today. Press Enter to search; on desktop it is focused on load. |
+| **Ingredient breakdown** | A multi-food phrase becomes a table: ingredient, amount, kcal, source badge and match badge. Edit amounts, remove items. |
+| **Fix the match** | "Not right? Pick another match" lists the five best USDA candidates; low-confidence matches open it for you. Your choice is saved. |
+| **One-tap foods** | Recent foods and ★ favorites appear as chips. The meal defaults to the time of day. |
+| **Persistent** | Log, goals, water, exercise and history are saved automatically under a private link (see limitations); refresh keeps them. Undo after add or remove. |
+| **Setup without hidden defaults** | An optional 3-step setup (goal, body stats, done). Skip it and you simply have no calorie goal. No example profile is silently used. |
+| **Insights** | Nutrition grade, suggestions, radar vs your targets, calories by meal, two-food comparison, for any logged day. |
+| **History** | Daily totals are saved automatically; trend chart; CSV export. "Load a sample week" shows everything populated. |
+| **Accessible** | Colour-blind-safe macro palette with text labels, readable text sizes, visible keyboard focus, semantic tables. |
+| **Match feedback** | 👍/👎 on each result and a hidden admin view (`?admin=1`) for the match-confirmed rate (local SQLite; not a benchmark result). |
 
 ---
 
-## 🛠️ Tech Stack
+## 📊 Results
+
+<!-- results:start -->
+Benchmark results are written to [`benchmark/results.md`](benchmark/results.md) and copied here by `python -m benchmark.sync_readme`.
+The accuracy benchmark needs human-labelled ground truth, which has not been produced yet, so no accuracy figure is reported.
+<!-- results:end -->
+
+UX measurements (before vs after redesign, same scripts, same machine) are in [`docs/ux/metrics-comparison.md`](docs/ux/metrics-comparison.md); the claims I consider defensible are listed with their sources in [`docs/ux/CLAIMS.md`](docs/ux/CLAIMS.md).
+
+---
+
+## 🧭 UX decisions
+
+- **Search is the primary action, so it is first.** Calorie goal, macros and water used to sit above it (search box at y = 1,179 px on a phone). Goals now live in Profile and a one-line summary sits under the search.
+- **Show what the API understood.** The old result merged "rice and carrots" into one 416 g row. Splitting it makes mistakes visible and fixable.
+- **Make uncertainty explicit and actionable.** Match badges are hints from the scorer, not probabilities, and each ingredient has a way out ("Pick another match").
+- **No invented personal data.** The old app computed a calorie need from an example 25-year-old profile. Now nothing is assumed; skipping setup means no goal.
+- **Save automatically, offer undo.** Manual "Save" buttons and silent data loss on refresh are gone.
+- **Rerun less.** Water, exercise, chips, amount edits and match changes rerun only the Today fragment; only changes other tabs must show rerun the whole app.
+- **Colour is never the only signal.** Okabe-Ito palette plus text labels and values next to every bar.
+- **Theme through config, not CSS hooks.** Colours come from `.streamlit/config.toml`; the stylesheet uses only generic selectors and its own classes.
+
+Full list of changes and the problem each one fixes: [`docs/ux/CHANGELOG.md`](docs/ux/CHANGELOG.md). Original problems: [`docs/ux/audit.md`](docs/ux/audit.md).
+
+---
+
+## 🔬 How the food search works
 
 ```
-Frontend     Streamlit 1.48+   Python web framework with reactive state
-Charts       Plotly             Bar, Radar, Pie, Scatter charts
-Data         Pandas             DataFrame manipulation & CSV export
-Styling      Custom CSS         Inter font, green gradient theme, card layout
-API (Primary) CalorieNinjas     Natural language nutrition parsing
-API (Fallback) USDA FoodData    380,000+ food database, relevance scoring
-Math         Mifflin-St Jeor   BMR & TDEE formula for calorie recommendations
+"2 cups white rice and carrots"
+        │
+        ▼
+ CalorieNinjas NLP ──► one record per ingredient, amounts parsed
+ (primary)
+        │ no answer
+        ▼
+ USDA FoodData Central ──► 3 data-type searches in parallel (Foundation, FNDDS, SR Legacy)
+ (fallback)                 retried on USDA's intermittent HTTP 400s
+                            ranked by a rule-based scorer; top 5 kept for "Pick another match"
+```
+
+The USDA scorer combines weighted terms: name starts with the query, query words in the first tokens, word hits, cooked-over-raw for prepared foods, a penalty when the first word is not in the query, a wrong-category penalty ("Bread, oatmeal" for "oatmeal"), a penalty for implausible calories, and a brevity term. Its terms and weights live in [`nutripulse/matching.py`](nutripulse/matching.py).
+
+---
+
+## 🧪 Methodology and limitations
+
+- **Benchmark design.** 139 queries split about 50/50 into dev and test ([`benchmark/queries.csv`](benchmark/queries.csv)). Scorer weights may be tuned on dev only; every reported number comes from the test split. The scripts refuse to report on partially labelled data.
+- **Labeler bias.** Ground truth is a person's judgement of which USDA entries are acceptable. One labeler is a single point of view; a second labeler on a subset gives Cohen's kappa. Candidates are shown in shuffled order, but a labeler can still prefer particular entries.
+- **Candidate pool.** Only candidates shown on the labeling sheet are labelled. A system that picks an unlabelled candidate is counted wrong, and these cases are reported.
+- **API data drift.** USDA and CalorieNinjas data change over time. Responses are cached in [`benchmark/cache`](benchmark/cache) so runs are reproducible, but results describe the data on the date they were collected.
+- **Scope.** English queries and common US foods only. Results do not transfer to other cuisines or languages.
+- **CalorieNinjas has no food ids**, so it cannot be scored on exact match. It is compared on a separate, weaker "calories within 20%" criterion.
+- **Operational metrics** come from a synthetic replay session, not real traffic, on one machine and network.
+- **Persistence.** Data is stored on the app server in SQLite, keyed by a random id in the URL. Anyone with the link can open that data; there are no accounts. Streamlit Community Cloud can wipe local storage on restart. Download your history if it matters.
+- **Not medical advice.** Calorie targets use the Mifflin-St Jeor equation and coarse adjustments. Estimates only.
+
+---
+
+## 🛠️ Tech stack
+
+```
+UI           Streamlit 1.48+     fragments, forms, theme via config.toml
+Charts       Plotly              radar, donut, trend, comparison
+Data         SQLite              per-user state and match feedback (stdlib)
+APIs         CalorieNinjas       natural-language parsing (primary)
+             USDA FoodData       fallback with a rule-based relevance scorer
+Quality      pytest, ruff        run in GitHub Actions on every push and PR
+UX tooling   Playwright, axe-core, Lighthouse   before/after measurements in tools/ux
 ```
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Quick start
 
-### 1. Clone the repo
 ```bash
 git clone https://github.com/VanshikaGurbani/NutriPulse.git
 cd NutriPulse
-```
-
-### 2. Install dependencies
-```bash
 pip install -r requirements.txt
 ```
 
-### 3. Set up API keys
+Create a `.env` file (see `.env.example`):
 
-Create a `.env` file in the project root:
 ```env
 USDA_API_KEY=your_usda_key_here
 CALORIENINJAS_KEY=your_calorieninjas_key_here
 ```
 
-| API | Free Tier | Get Key |
+| API | Free tier | Get a key |
 |---|---|---|
 | USDA FoodData Central | 3,500 calls/day | [api.data.gov](https://api.data.gov/signup/) |
 | CalorieNinjas | 10,000 calls/month | [calorieninjas.com/api](https://calorieninjas.com/api) |
 
-### 4. Run the app
 ```bash
 streamlit run nutrition_tracker.py
 ```
 
-Open [http://localhost:8501](http://localhost:8501) 🎉
+Tests and lint (no network needed):
 
----
-
-## ☁️ Deploying to Streamlit Cloud
-
-1. Push to GitHub
-2. Go to [share.streamlit.io](https://share.streamlit.io) → New app → select this repo
-3. In **App settings → Secrets**, add:
-```toml
-USDA_API_KEY = "your_key"
-CALORIENINJAS_KEY = "your_key"
+```bash
+pip install pytest ruff
+ruff check .
+pytest
 ```
-4. Deploy — live in ~60 seconds
+
+### Running the benchmark
+
+```bash
+python -m benchmark.make_labeling_sheet      # 10 shuffled USDA candidates per query (cached; stops at 500 live calls)
+# label every row y or n in benchmark/labeling_sheet.csv, then:
+python -m benchmark.apply_labels benchmark/labeling_sheet.csv
+python -m benchmark.run_benchmark tune       # dev split only
+python -m benchmark.run_benchmark report     # test split only -> benchmark/results.md, results.csv, charts/
+python -m benchmark.run_meals                # needs reference values in benchmark/meals.csv
+python -m benchmark.ops_metrics              # latency, fallback rate, cache hit rate
+python -m benchmark.sync_readme              # copy results.md into this README
+```
 
 ---
 
-## 📁 Project Structure
+## 📁 Project structure
 
 ```
 NutriPulse/
-├── nutrition_tracker.py   # Main app (backend + UI, ~750 lines)
-├── requirements.txt       # Direct dependencies only
-├── .streamlit/
-│   └── config.toml        # Green theme configuration
-├── .env                   # API keys (gitignored)
-└── README.md
+├── nutrition_tracker.py        # thin Streamlit entry point
+├── nutripulse/
+│   ├── apis.py                 # CalorieNinjas + USDA clients: timeouts, retries, typed errors, call budget
+│   ├── matching.py             # query parsing, scorer (terms + weights), candidate ranking
+│   ├── lookup.py               # free text -> ingredient list, alternatives, match swap
+│   ├── nutrition.py            # Mifflin-St Jeor TDEE, grade, tips, unit and goal helpers
+│   ├── store.py                # SQLite persistence and automatic daily snapshots
+│   ├── cache.py                # disk JSON cache + API-call counters
+│   ├── feedback.py             # thumbs and match-correction log
+│   └── ui/                     # today, insights, history, profile, onboarding, style
+├── benchmark/                  # queries, labeling tools, runner, results, API cache
+├── tests/                      # unit, store, lookup and headless UI tests
+├── tools/ux/                   # screenshots, click/latency/axe/Lighthouse measurement, e2e smoke test
+├── docs/ux/                    # audit, before/after screenshots, metrics, changelog, claims, usability test kit
+└── .streamlit/config.toml      # theme
 ```
-
----
-
-## 🔬 How the Food Search Works
-
-```
-User input: "2 cups white rice with carrots and peas"
-         │
-         ▼
-  CalorieNinjas NLP API  ──► Returns each ingredient separately
-  (primary)                   with quantities already parsed
-         │
-    No result?
-         │
-         ▼
-  USDA FoodData Central  ──► Relevance scoring algorithm
-  (fallback)                  penalises wrong-category matches
-                              e.g. "Bread, oatmeal" ≠ "oatmeal"
-```
-
-The custom USDA relevance scorer uses:
-- **First-token match** bonus for foods that start with the query word
-- **Wrong-category penalty** (-10) for USDA "Primary, query-word" naming patterns
-- **Cooked/raw** context bonus/penalty based on food type
-- **Calorie sanity check** for unusually high per-100g values
-
----
-
-## 🎨 Design System
-
-- **Font:** Inter (Google Fonts)
-- **Primary colour:** `#3cb371` (medium sea green)
-- **Gradients:** `#2d6a4f → #40916c → #52b788`
-- **Cards:** `st.container(border=True)` + custom CSS targeting `[data-testid="stVerticalBlockBorderWrapper"]`
-- **Macro colours:** Calories=orange · Carbs=amber · Protein=blue · Fat=purple · Fiber=green
 
 ---
 
 ## 📜 License
 
-MIT — free to use, modify, and distribute.
+MIT: free to use, modify, and distribute.
 
 ---
 
 <div align="center">
 
 Built with 💚 using [Streamlit](https://streamlit.io) · Data from [USDA FoodData Central](https://fdc.nal.usda.gov/) & [CalorieNinjas](https://calorieninjas.com)
-
-**[🚀 Try it live →](https://nutripulse.streamlit.app/)**
 
 </div>

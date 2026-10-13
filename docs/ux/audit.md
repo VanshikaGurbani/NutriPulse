@@ -27,15 +27,15 @@ was checked against the code in `nutrition_tracker.py` (function/section named) 
 | 12 | Water row: 5 columns collapse into 5 full-width stacked buttons on mobile, about 300 px of vertical space for one tracker | `today-result-full-375.png` |
 | 13 | No per-item delete or edit in the food log; only "Clear Log", with no confirmation and no undo | `Today's Food Log` section |
 | 14 | Pressing Enter in the search box does nothing (not a form); the user must find and click "Analyze Food" | `food_input` / `analyze_clicked` |
-| 15 | Calorie goal and water goal are bare number inputs with collapsed labels, which hides the label from screen readers (`label_visibility="collapsed"` on "Goal" / "Goal ml") | Today tab |
+| 15 | ~~Calorie goal and water goal inputs hide their labels (`label_visibility="collapsed"`)~~ **Retracted after measuring.** Streamlit still exposes the label to assistive tech as an aria-label, and axe reported no missing-label violation on the original UI. It is a visual-only issue (no visible label), not an accessibility failure. | Today tab; axe baseline |
 | 16 | Styling relies on `data-testid` selectors (`stVerticalBlockBorderWrapper`, `stTextInput`, `stButton`, `stRadio`, `stTabs`) that Streamlit does not guarantee to keep | CSS block in `nutrition_tracker.py` |
-| 17 | Small text and low-contrast greys: captions and labels use 0.72-0.82 rem with `#888`/`#999` on near-white (below the 4.5:1 contrast ratio); to be confirmed with axe in the baseline run | CSS + inline styles |
+| 17 | Low-contrast text: **confirmed, narrower than first stated.** The baseline axe run found `color-contrast` failures on 5 nodes (Insights and History tabs). Small text sizes (0.72-0.82 rem) and `#888`/`#999` greys are in the code but only those 5 nodes failed the 4.5:1 threshold. | `docs/ux/baseline-metrics.md` |
 | 18 | Fonts are loaded from Google at runtime via `@import`, adding a render-blocking third-party request | CSS block |
 | 19 | USDA/CalorieNinjas food names are interpolated into `unsafe_allow_html` markup unescaped (low risk, API-sourced, but not safe by construction) | `result-food-name` markdown |
 | 20 | Recent foods appear in two places (Today chips and Profile tab list); the Profile tab is the wrong home for them | Tabs 1 and 3 |
 | 21 | Thumbs up/down buttons that I added in the feedback phase stack vertically on mobile with large gaps (my own regression; fixed in the layout phase) | `today-result-full-375.png` |
 
-## Not yet measured (baseline run still to do)
+## Baseline measurements
 
-Clicks/keystrokes to log a first food, Lighthouse mobile accessibility score, axe violations, first-load and
-search latency. These are recorded in `docs/ux/baseline-metrics.md` before any UI change.
+Recorded before any UI change in `docs/ux/baseline-metrics.md` (clicks/keystrokes to log a first food, Lighthouse mobile
+accessibility 88, axe 4 distinct rules / 61 nodes, load and search latency).

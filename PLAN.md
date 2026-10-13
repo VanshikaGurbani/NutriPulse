@@ -6,7 +6,7 @@ Branch: `benchmark-and-ux`. Small commits, app must run after every commit. Noth
 
 | # | Needs | Blocks |
 |---|-------|--------|
-| B1 | `.env` with `USDA_API_KEY` and `CALORIENINJAS_KEY` (none in the clone) | Any live API call: candidate sheets, benchmark runs, latency numbers |
+| B1 | ~~`.env` with API keys~~ **resolved** (keys added by owner; placeholders now treated as missing) | |
 | B2 | Ground-truth labels (acceptable FDC ids) for every query, filled in on the labeling sheet | Accuracy, MRR, ablation, tuning |
 | B3 | Optional 2nd labeler file (~30 queries) | Cohen's kappa |
 | B4 | Meal reference values with sources (meals.csv) | Meal-level MAPE |
@@ -21,16 +21,16 @@ Branch: `benchmark-and-ux`. Small commits, app must run after every commit. Noth
 | 2 | pytest suite (44 tests, no live calls), ruff, GitHub Actions + README badge | **done locally**; the CI run itself has not executed because nothing is pushed |
 | 3 | Benchmark harness (queries, labeling sheet, label import, kappa, dev-only tuning, test-only report, ablation, meals MAPE, ops metrics, charts) | **code done + tested on synthetic data**; numbers blocked on B1/B2/B4 |
 | 4 | Thumbs up/down + SQLite feedback + admin view (`?admin=1`) | **done** (store tested, UI driven headlessly) |
-| 5 | README Results / Methodology, benchmark/CLAIMS.md | CLAIMS only after real results |
+| 5 | README Results / Methodology (done; Results section is script-synced from results.md), benchmark/CLAIMS.md | CLAIMS.md only after real accuracy results |
 
 ## Task 2: UX overhaul with before/after measurement
 
 | Phase | Work | Status |
 |-------|------|--------|
-| D | Playwright installed, 32 before-screenshots captured, `docs/ux/audit.md` written | **done**; baseline metrics (clicks, Lighthouse, axe, latency) still to run |
-| 1-8 | Layout, search form, results table, fix-the-match, SQLite persistence, onboarding, fragments, accessibility | pending |
-| M | Click/keystroke counts, Lighthouse + axe, latency; `usability-test.md` template left empty | pending |
-| Docs | `docs/ux/CHANGELOG.md`, `docs/ux/CLAIMS.md`, README UX section | pending |
+| D | Playwright installed, 32 before-screenshots, `docs/ux/audit.md`, baseline metrics (clicks, Lighthouse, axe, latency) | **done** |
+| 1-8 | Layout, search form, results table, fix-the-match, SQLite persistence, onboarding, fragments, accessibility | **done** (101 tests incl. headless UI; 10-check real-browser smoke test passes) |
+| M | Click/keystroke counts, Lighthouse + axe, latency, water-tap latency; `usability-test.md` template left empty | **done** (`docs/ux/metrics-comparison.md`); usability sessions need real participants |
+| Docs | `docs/ux/CHANGELOG.md`, `docs/ux/CLAIMS.md`, README UX section + GIF | **done** |
 
 ## Order of work
 
