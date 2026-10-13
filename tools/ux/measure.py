@@ -87,6 +87,41 @@ def before_flow(page):
             "scroll_gestures": gestures, "search_ms_cold": round(search_ms)}
 
 
+@flow("after")
+def after_flow(page):
+    """Log a first food in the NEW UI: (focus the box if autofocus did not), type, press Enter, scroll to Add, click Add."""
+    box = page.get_by_label("Food search")
+    search_in_first_screen = in_view(page, box)
+    search_y = box.bounding_box()["y"]
+    gestures = scroll_into_view(page, box)
+    page.wait_for_timeout(800)                          # give the autofocus script its chance, as a person would
+    focused = page.evaluate("document.activeElement && document.activeElement.getAttribute('aria-label') === 'Food search'")
+    if not focused:
+        box.click()
+    page.keyboard.type(QUERY)
+    t0 = time.perf_counter()
+    page.keyboard.press("Enter")
+    page.get_by_text("Ingredients found").first.wait_for(timeout=30000)
+    search_ms = (time.perf_counter() - t0) * 1000
+    add = page.get_by_role("button", name="Add to ").first
+    gestures += scroll_into_view(page, add)
+    add.click()
+    page.get_by_text("Nothing logged yet").first.wait_for(state="detached", timeout=10000)
+    return {"search_in_first_screen": search_in_first_screen, "search_box_y_px": round(search_y), "autofocused": bool(focused),
+            "scroll_gestures": gestures, "search_ms_cold": round(search_ms)}
+
+
+def repeat_search_after(page):
+    box = page.get_by_label("Food search")
+    scroll_into_view(page, box)
+    box.fill(QUERY)
+    t0 = time.perf_counter()
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(100)
+    page.get_by_text("Ingredients found").first.wait_for(timeout=30000)
+    return round((time.perf_counter() - t0) * 1000)
+
+
 def repeat_search_before(page):
     box = page.get_by_placeholder("e.g. 2 cups oatmeal")
     scroll_into_view(page, box)
@@ -99,7 +134,7 @@ def repeat_search_before(page):
     return round((time.perf_counter() - t0) * 1000)
 
 
-REPEAT = {"before": repeat_search_before}
+REPEAT = {"before": repeat_search_before, "after": repeat_search_after}
 
 
 def measure_interaction(browser, url, version, vp_name):
