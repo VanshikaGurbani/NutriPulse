@@ -10,3 +10,5 @@ node_modules/
 benchmark/cache_ops/
 benchmark/labeling_sheet*.csv
 benchmark/cache_ops_usda/
+tools/ux/node_modules/
+tools/ux/_*
