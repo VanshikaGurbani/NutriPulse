@@ -27,7 +27,7 @@ Branch: `benchmark-and-ux`. Small commits, app must run after every commit. Noth
 
 | Phase | Work | Status |
 |-------|------|--------|
-| D | Install Playwright, "before" screenshots (375x812, 1280x800, every tab), `docs/ux/audit.md`, baseline metrics | pending (runs on the refactored app, before UI changes) |
+| D | Playwright installed, 32 before-screenshots captured, `docs/ux/audit.md` written | **done**; baseline metrics (clicks, Lighthouse, axe, latency) still to run |
 | 1-8 | Layout, search form, results table, fix-the-match, SQLite persistence, onboarding, fragments, accessibility | pending |
 | M | Click/keystroke counts, Lighthouse + axe, latency; `usability-test.md` template left empty | pending |
 | Docs | `docs/ux/CHANGELOG.md`, `docs/ux/CLAIMS.md`, README UX section | pending |

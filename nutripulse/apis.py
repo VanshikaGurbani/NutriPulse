@@ -11,8 +11,9 @@ from .cache import DiskCache, stats
 
 load_dotenv()
 
-USDA_BASE = "https://api.nal.usda.gov/fdc/v1"
-CALORIENINJAS_URL = "https://api.calorieninjas.com/v1/nutrition"
+# Overridable so UI tests can point the app at a local mock server.
+USDA_BASE = os.getenv("NUTRIPULSE_USDA_BASE", "https://api.nal.usda.gov/fdc/v1")
+CALORIENINJAS_URL = os.getenv("NUTRIPULSE_CN_URL", "https://api.calorieninjas.com/v1/nutrition")
 TIMEOUT_S = 10
 
 NUTRIENT_IDS = {"calories": 1008, "protein": 1003, "fat": 1004, "carbs": 1005, "fiber": 1079}
