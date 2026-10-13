@@ -1,0 +1,9 @@
+line-length = 150
+target-version = "py310"
+
+[lint]
+select = ["E", "F", "W"]
+ignore = ["E701", "E702", "E741"]
+
+[lint.per-file-ignores]
+"nutrition_tracker.py" = ["E501"]

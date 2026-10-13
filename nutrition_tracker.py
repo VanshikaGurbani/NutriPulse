@@ -1,42 +1,41 @@
-import re
 import datetime
-import streamlit as st
-import requests
+
 import plotly.graph_objects as go
-from dotenv import load_dotenv
-import os
+import streamlit as st
 
-load_dotenv()
-API_KEY          = os.getenv("USDA_API_KEY")
-CALORIENINJAS_KEY = os.getenv("CALORIENINJAS_KEY", "")
-API_BASE         = "https://api.nal.usda.gov/fdc/v1"
+from nutripulse import apis
+from nutripulse.cache import stats
+from nutripulse.matching import UNIT_TO_GRAMS, UNITS, clean_food_name, parse_serving, search_food
+from nutripulse.nutrition import ACTIVITY_LEVELS, calc_tdee, nutrition_grade, smart_tips
 
-NUTRIENT_IDS = {"calories": 1008, "protein": 1003, "fat": 1004, "carbs": 1005, "fiber": 1079}
-CALORIE_IDS  = [1008, 2047]
+API_KEY = apis.usda_key()
 
-RAW_FOODS = {
-    "apple", "banana", "orange", "grape", "strawberr", "blueberr", "mango",
-    "watermelon", "pineapple", "peach", "pear", "cherry", "kiwi", "melon",
-    "avocado", "tomato", "cucumber", "lettuce", "spinach", "kale",
-    "carrot", "celery", "oil", "butter", "honey", "milk", "yogurt",
-    "cheese", "juice", "nuts", "almond", "walnut", "cashew", "peanut",
-}
+# Lookups are cached for an hour; `stats` counts API calls vs cache hits.
+_LOOKUP_TTL_S = 3600
+_ran_body = {"flag": False}
 
-UNIT_TO_GRAMS = {
-    "g": 1.0, "kg": 1000.0, "oz": 28.35, "lb": 453.6,
-    "cup": 240.0, "tbsp": 15.0, "tsp": 5.0, "ml": 1.0,
-    "piece": 100.0, "slice": 30.0,
-}
-UNITS = list(UNIT_TO_GRAMS.keys())
-MAX_SANE_CALORIES      = 950
-LOW_CONFIDENCE_THRESHOLD = 5
 
-SOURCE_BADGES = {
-    "Foundation":     "🟢 Foundation",
-    "SR Legacy":      "🔵 SR Legacy",
-    "Survey (FNDDS)": "🔵 Survey (FNDDS)",
-    "Branded":        "🟡 Branded",
-}
+@st.cache_data(ttl=_LOOKUP_TTL_S, show_spinner=False)
+def _cached_nlp(query: str):
+    _ran_body["flag"] = True
+    return apis.search_food_nlp(query)
+
+
+@st.cache_data(ttl=_LOOKUP_TTL_S, show_spinner=False)
+def _cached_usda(name: str):
+    _ran_body["flag"] = True
+    return search_food(name)
+
+
+def _counted(fn, arg):
+    """Run a cached lookup and record whether it was served from st.cache_data."""
+    _ran_body["flag"] = False
+    out = fn(arg)
+    if not _ran_body["flag"]:
+        stats.record_hit()
+    return out
+
+
 
 MEALS = ["🌅 Breakfast", "☀️ Lunch", "🌙 Dinner", "🍎 Snack"]
 MEAL_COLORS = {
@@ -55,176 +54,7 @@ EXERCISES = {
     "🪜 Stair Climbing": 9, "💃 Dancing": 5,
 }
 
-ACTIVITY_LEVELS = {
-    "Sedentary (desk job)":          1.2,
-    "Lightly active (1-3x/week)":    1.375,
-    "Moderately active (3-5x/week)": 1.55,
-    "Very active (6-7x/week)":       1.725,
-    "Extra active (physical job)":   1.9,
-}
-
 RDA = {"Calories": 2000, "Protein (g)": 50, "Carbs (g)": 300, "Fat (g)": 65, "Fiber (g)": 28}
-
-
-# ── Input parsing ─────────────────────────────────────────────────────────────
-
-def parse_serving(text: str):
-    text = text.strip()
-    match = re.match(
-        r"^(\d+(?:\.\d+)?(?:/\d+)?)\s*"
-        r"(cups?|tbsps?|tsps?|fl\.?\s*oz|oz"
-        r"|kg|lbs?|g|ml|l|pieces?|slices?)?\s*"
-        r"(?:of\s+)?(.+)$",
-        text, flags=re.IGNORECASE,
-    )
-    if not match:
-        return 100.0, "g", _clean_food_name(text)
-    qty_str, unit_str, food = match.groups()
-    if "/" in qty_str:
-        n, d = qty_str.split("/"); qty = float(n) / float(d)
-    else:
-        qty = float(qty_str)
-    if unit_str:
-        u = unit_str.lower().strip()
-        if re.match(r"fl\.?\s*oz", u):   unit = "oz"
-        elif u.startswith("cup"):         unit = "cup"
-        elif u.startswith("tbsp"):        unit = "tbsp"
-        elif u.startswith("tsp"):         unit = "tsp"
-        elif u.startswith("lb"):          unit = "lb"
-        elif u.startswith("piece"):       unit = "piece"
-        elif u.startswith("slice"):       unit = "slice"
-        else:
-            unit = u.rstrip("s") if u.endswith("s") and u not in ("oz", "ml") else u
-            unit = unit if unit in UNIT_TO_GRAMS else "g"
-    else:
-        unit = "g"
-    return qty, unit, _clean_food_name(food)
-
-
-def _clean_food_name(name: str) -> str:
-    name = re.sub(r"[^\w\s]", "", name)
-    return re.sub(r"\s+", " ", name).strip()
-
-
-# ── USDA matching ─────────────────────────────────────────────────────────────
-
-def _score(food: dict, q_words: list) -> float:
-    desc   = food.get("description", "").lower()
-    tokens = re.split(r"[\s,]+", desc)
-    all_present = all(re.search(rf"\b{re.escape(w)}\b", desc) for w in q_words)
-    starts_with = 10 if (q_words and tokens and tokens[0] == q_words[0] and all_present) else 0
-    n = max(len(q_words) + 1, 3)
-    first_token_relevant = bool(tokens and tokens[0] in q_words)
-    in_first_tokens = 5 if (first_token_relevant and all(w in tokens[:n] for w in q_words)) else 0
-    word_hits = sum(1 for w in q_words if re.search(rf"\b{re.escape(w)}\b", desc))
-    is_raw_food = any(rw in " ".join(q_words) for rw in RAW_FOODS)
-    user_specified_prep = any(w in q_words for w in ("raw","cooked","baked","grilled","boiled","fried","roasted"))
-    if not is_raw_food and not user_specified_prep:
-        cooked_bonus = 4 if "cooked" in desc else 0
-        raw_penalty  = -3 if re.search(r"\braw\b", desc) else 0
-    else:
-        cooked_bonus = raw_penalty = 0
-    first_mismatch = -8 if (tokens and tokens[0] not in q_words) else 0
-    wrong_category = 0
-    if first_mismatch and q_words:
-        segs = [s.strip() for s in desc.split(",")]
-        if (len(segs) > 1
-                and not any(re.search(rf"\b{re.escape(w)}\b", segs[0]) for w in q_words)
-                and any(re.search(rf"\b{re.escape(w)}\b", sg) for w in q_words for sg in segs[1:])):
-            wrong_category = -10
-    nutrients      = {n_["nutrientId"]: n_.get("value", 0) for n_ in food.get("foodNutrients", [])}
-    calorie_penalty = -50 if nutrients.get(NUTRIENT_IDS["calories"], 0) > MAX_SANE_CALORIES else 0
-    brevity        = -len(desc) / 200
-    return (starts_with + in_first_tokens + word_hits + cooked_bonus + raw_penalty
-            + first_mismatch + wrong_category + calorie_penalty + brevity)
-
-
-def best_match(foods: list, query: str) -> tuple:
-    q_words = [w.lower() for w in re.split(r"\s+", query.strip()) if w]
-    scored  = [(f, _score(f, q_words)) for f in foods]
-    return max(scored, key=lambda x: x[1])
-
-
-def _fetch(query: str, data_type) -> list:
-    params = {"query": query, "api_key": API_KEY, "pageSize": 8}
-    if data_type:
-        params["dataType"] = data_type
-    try:
-        resp = requests.get(f"{API_BASE}/foods/search", params=params, timeout=10)
-        resp.raise_for_status()
-        return resp.json().get("foods", [])
-    except requests.HTTPError:
-        return []
-
-
-def search_food(query: str):
-    all_foods: list = []
-    for dt in ["Foundation", "Survey (FNDDS)", "SR Legacy"]:
-        all_foods.extend(_fetch(query, dt))
-    if not all_foods:
-        all_foods = _fetch(query, None)
-        if not all_foods:
-            resp = requests.get(f"{API_BASE}/foods/search",
-                                params={"query": query, "api_key": API_KEY, "pageSize": 5}, timeout=10)
-            resp.raise_for_status()
-            return None
-    food, match_score = best_match(all_foods, query)
-    nutrients = {n["nutrientId"]: n.get("value", 0) for n in food.get("foodNutrients", [])}
-    calories  = round(next((nutrients[cid] for cid in CALORIE_IDS if nutrients.get(cid, 0) > 0), 0), 1)
-    raw_type  = food.get("dataType", "Unknown")
-    q_words   = [w.lower() for w in re.split(r"\s+", query.strip()) if w]
-    desc_lower = food.get("description", "").lower()
-    any_word_found = any(re.search(rf"\b{re.escape(w)}\b", desc_lower) for w in q_words)
-    return {
-        "description":        food.get("description", query),
-        "calories":           calories,
-        "protein":            round(nutrients.get(NUTRIENT_IDS["protein"], 0), 1),
-        "fat":                round(nutrients.get(NUTRIENT_IDS["fat"],     0), 1),
-        "carbs":              round(nutrients.get(NUTRIENT_IDS["carbs"],   0), 1),
-        "fiber":              round(nutrients.get(NUTRIENT_IDS["fiber"],   0), 1),
-        "source":             SOURCE_BADGES.get(raw_type, f"📄 {raw_type}"),
-        "suspicious_calories": calories > MAX_SANE_CALORIES,
-        "low_confidence":     match_score < LOW_CONFIDENCE_THRESHOLD or not any_word_found,
-    }
-
-
-# ── CalorieNinjas NLP search (primary) ───────────────────────────────────────
-
-def search_food_nlp(query: str) -> dict | None:
-    """Natural-language nutrition lookup via CalorieNinjas.
-    Returns per-100 g values + serving_g so the existing factor UI works."""
-    if not CALORIENINJAS_KEY or CALORIENINJAS_KEY.startswith("your_"):
-        return None
-    try:
-        resp = requests.get(
-            "https://api.calorieninjas.com/v1/nutrition",
-            headers={"X-Api-Key": CALORIENINJAS_KEY},
-            params={"query": query},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        items = resp.json().get("items", [])
-        if not items:
-            return None
-        total_g = sum(i.get("serving_size_g", 100) for i in items) or 100
-        f = 100 / total_g          # normalise to per-100 g
-        names = " + ".join(i["name"].title() for i in items)
-        return {
-            "description":         names,
-            "calories":            round(sum(i.get("calories", 0)                  for i in items) * f, 1),
-            "protein":             round(sum(i.get("protein_g", 0)                 for i in items) * f, 1),
-            "carbs":               round(sum(i.get("carbohydrates_total_g", 0)     for i in items) * f, 1),
-            "fat":                 round(sum(i.get("fat_total_g", 0)               for i in items) * f, 1),
-            "fiber":               round(sum(i.get("fiber_g", 0)                   for i in items) * f, 1),
-            "sugar":               round(sum(i.get("sugar_g", 0)                   for i in items) * f, 1),
-            "sodium":              round(sum(i.get("sodium_mg", 0)                 for i in items) * f, 0),
-            "serving_g":           round(total_g, 1),
-            "source":              "🟢 CalorieNinjas NLP",
-            "low_confidence":      False,
-            "suspicious_calories": False,
-        }
-    except Exception:
-        return None
 
 
 # ── UI helpers ────────────────────────────────────────────────────────────────
@@ -257,49 +87,6 @@ def macro_bar_fig(carbs_g, prot_g, fat_g, height=80):
     )
     return fig
 
-
-def calc_tdee(gender, age, weight_kg, height_cm, activity):
-    bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age + (5 if gender == "Male" else -161)
-    return round(bmr * ACTIVITY_LEVELS.get(activity, 1.55))
-
-
-def nutrition_grade(consumed, goal, protein, fiber, carbs, fat):
-    if consumed == 0:
-        return None, None, None
-    score = 0
-    if goal > 0:
-        d = abs(consumed - goal) / goal
-        score += 40 if d <= 0.05 else 32 if d <= 0.10 else 22 if d <= 0.20 else 12 if d <= 0.35 else 4
-    score += 20 if protein >= 50 else 15 if protein >= 35 else 10 if protein >= 20 else 5 if protein >= 10 else 0
-    score += 20 if fiber >= 25 else 15 if fiber >= 18 else 10 if fiber >= 12 else 5 if fiber >= 6 else 0
-    tm = carbs * 4 + protein * 4 + fat * 9
-    if tm > 0:
-        cp = carbs * 4 / tm * 100; pp = protein * 4 / tm * 100; fp = fat * 9 / tm * 100
-        score += 20 if (45 <= cp <= 65 and 15 <= pp <= 35 and 20 <= fp <= 35) else \
-                 12 if (40 <= cp <= 70 and 12 <= pp <= 40) else 5
-    if score >= 85: return "A", "#2e7d32", "Excellent! Your nutrition is very well balanced."
-    elif score >= 70: return "B", "#558b2f", "Good work! Small improvements could round it out."
-    elif score >= 55: return "C", "#f57f17", "Decent. Try to improve protein and fiber intake."
-    elif score >= 40: return "D", "#e65100", "Needs improvement — focus on balance and fiber."
-    else:             return "F", "#c62828", "Keep logging — you need more food or better balance."
-
-
-def smart_tips(protein, fiber, cal, goal_cal, water_ml, meals_used):
-    tips = []
-    if protein < 30 and cal > 200:
-        tips.append(("💪", "Low protein", "Try chicken, eggs, Greek yogurt, or lentils."))
-    if fiber < 10 and cal > 200:
-        tips.append(("🌿", "Low fiber", "Add vegetables, beans, or whole grains."))
-    if water_ml < 1000:
-        tips.append(("💧", "Low hydration", "Aim for at least 8 glasses (2 L) of water today."))
-    if len(meals_used) < 2 and cal > 100:
-        tips.append(("🍽️", "Log more meals", "Track all meals for accurate daily totals."))
-    if goal_cal > 0 and cal > goal_cal * 1.1:
-        tips.append(("⚠️", f"{round(cal - goal_cal)} kcal over goal", "Consider a lighter option next meal."))
-    if not tips:
-        tips.append(("✅", "On track!" if cal > 0 else "Start logging",
-                     "Your nutrition looks balanced today!" if cal > 0 else "Search for a food above to get started."))
-    return tips
 
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -604,7 +391,7 @@ with tab1:
                 with st.spinner(f"Looking up '{food_input}'…"):
                     try:
                         # Primary: CalorieNinjas NLP (pass full query)
-                        result = search_food_nlp(food_input)
+                        result = _counted(_cached_nlp, food_input)
                         if result is not None:
                             serving_g = result.get("serving_g", 100.0)
                             _ss.serving_qty  = serving_g
@@ -612,7 +399,7 @@ with tab1:
                         else:
                             # Fallback: USDA keyword search
                             qty, unit, food_name = parse_serving(food_input)
-                            result = search_food(food_name)
+                            result = _counted(_cached_usda, food_name)
                             if result is None:
                                 st.warning("No results found — try a simpler name.")
                                 _ss.last_result = None
@@ -897,8 +684,8 @@ with tab2:
             if cmp1.strip() and cmp2.strip():
                 with st.spinner("Fetching…"):
                     try:
-                        _ss.cmp_r1 = search_food(_clean_food_name(cmp1))
-                        _ss.cmp_r2 = search_food(_clean_food_name(cmp2))
+                        _ss.cmp_r1 = _counted(_cached_usda, clean_food_name(cmp1))
+                        _ss.cmp_r2 = _counted(_cached_usda, clean_food_name(cmp2))
                     except Exception as e:
                         st.error(f"Error: {e}")
 
