@@ -1,0 +1,157 @@
+{
+  "version": "after",
+  "date": "2026-10-13 16:49",
+  "interaction": {
+    "375": [
+      {
+        "search_in_first_screen": true,
+        "search_box_y_px": 167,
+        "autofocused": false,
+        "scroll_gestures": 2,
+        "search_ms_cold": 1372,
+        "clicks": 2,
+        "keystrokes": 30,
+        "viewport": "375",
+        "first_load_ms": 2186
+      },
+      {
+        "search_in_first_screen": true,
+        "search_box_y_px": 167,
+        "autofocused": false,
+        "scroll_gestures": 2,
+        "search_ms_cold": 149,
+        "clicks": 2,
+        "keystrokes": 30,
+        "viewport": "375",
+        "first_load_ms": 1489
+      },
+      {
+        "search_in_first_screen": true,
+        "search_box_y_px": 167,
+        "autofocused": false,
+        "scroll_gestures": 2,
+        "search_ms_cold": 178,
+        "clicks": 2,
+        "keystrokes": 30,
+        "viewport": "375",
+        "first_load_ms": 1450
+      }
+    ],
+    "1280": [
+      {
+        "search_in_first_screen": true,
+        "search_box_y_px": 137,
+        "autofocused": true,
+        "scroll_gestures": 1,
+        "search_ms_cold": 902,
+        "clicks": 1,
+        "keystrokes": 30,
+        "viewport": "1280",
+        "first_load_ms": 2177
+      },
+      {
+        "search_in_first_screen": true,
+        "search_box_y_px": 137,
+        "autofocused": true,
+        "scroll_gestures": 1,
+        "search_ms_cold": 117,
+        "clicks": 1,
+        "keystrokes": 30,
+        "viewport": "1280",
+        "first_load_ms": 1460
+      },
+      {
+        "search_in_first_screen": true,
+        "search_box_y_px": 137,
+        "autofocused": true,
+        "scroll_gestures": 1,
+        "search_ms_cold": 117,
+        "clicks": 1,
+        "keystrokes": 30,
+        "viewport": "1280",
+        "first_load_ms": 1457
+      }
+    ]
+  },
+  "latency": {
+    "load_cold_ms": 2186,
+    "load_warm_ms": 1026,
+    "repeat_search_ms": 157
+  },
+  "axe": {
+    "per_tab": {
+      "Today": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "nodes": 1,
+          "help": "Elements must meet minimum color contrast ratio thresholds"
+        },
+        {
+          "id": "region",
+          "impact": "moderate",
+          "nodes": 7,
+          "help": "All page content should be contained by landmarks"
+        }
+      ],
+      "Insights": [
+        {
+          "id": "region",
+          "impact": "moderate",
+          "nodes": 7,
+          "help": "All page content should be contained by landmarks"
+        }
+      ],
+      "Profile": [
+        {
+          "id": "aria-allowed-attr",
+          "impact": "critical",
+          "nodes": 1,
+          "help": "Elements must only use supported ARIA attributes"
+        },
+        {
+          "id": "button-name",
+          "impact": "critical",
+          "nodes": 18,
+          "help": "Buttons must have discernible text"
+        },
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "nodes": 1,
+          "help": "Elements must meet minimum color contrast ratio thresholds"
+        },
+        {
+          "id": "region",
+          "impact": "moderate",
+          "nodes": 7,
+          "help": "All page content should be contained by landmarks"
+        }
+      ],
+      "History": [
+        {
+          "id": "region",
+          "impact": "moderate",
+          "nodes": 7,
+          "help": "All page content should be contained by landmarks"
+        }
+      ]
+    },
+    "violation_rules_total": 8,
+    "violating_nodes_total": 49,
+    "rules_by_impact": {
+      "serious": 2,
+      "moderate": 4,
+      "critical": 2
+    }
+  },
+  "lighthouse": {
+    "scores": [
+      100,
+      100,
+      100
+    ],
+    "median": 100,
+    "preset": "lighthouse default (mobile emulation)"
+  }
+}

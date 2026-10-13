@@ -274,10 +274,12 @@ def render_strip(store):
         pct, note, mark, bar = 0, "No daily goal set (add one in Profile)", "ⓘ", ""
         main = f"{fnum(net)} kcal today"
     extra = f" · {fnum(t['kcal'])} eaten, {fnum(t['burned'])} burned" if t["burned"] else ""
+    water_goal = s.get("water_goal_ml", 2000)
     macros = []
     for label, key, gkey in (("Protein", "protein", "goal_protein"), ("Carbs", "carbs", "goal_carbs"), ("Fat", "fat", "goal_fat")):
         g = s.get(gkey)
         macros.append(f"<span>{label} {fnum(t[key])}{f' / {fnum(g)}' if g else ''} g</span>")
+    macros.append(f"<span>Water {fnum(t['water_ml'])} / {fnum(water_goal)} ml</span>")
     st.markdown(f'<div class="np-strip"><div class="np-strip-top"><span class="np-strip-main">{main}</span>'
                 f'<span class="np-strip-note">{mark} {note}{extra}</span></div>{bar}'
                 f'<div class="np-strip-macros">{"".join(macros)}</div></div>', unsafe_allow_html=True)
@@ -362,17 +364,16 @@ def render_water(store):
     s = store.settings()
     goal = s.get("water_goal_ml", 2000)
     ml = store.water(today_str())
-    with st.expander(f"Water: {ml / 1000:.1f} of {goal / 1000:.1f} L"):
+    with st.expander("Water"):   # static label: a changing label would re-create (and collapse) the expander on every tap
         st.markdown(progress_html("Water", ml, goal, "ml", "#0072B2"), unsafe_allow_html=True)
-        muted(f"About {ml / 250:.1f} glasses of 250 ml. The goal is {fnum(goal)} ml; change it in Profile.")
+        muted(f"{fnum(ml)} of {fnum(goal)} ml, about {ml / 250:.1f} glasses of 250 ml. Change the goal in Profile.")
         st.segmented_control("Add water", list(WATER_OPTIONS), key="np_water_pick", on_change=_on_water, args=(store,))
 
 
 def render_exercise(store):
     day = today_str()
     ex = store.exercises(day)
-    burned = sum(x["kcal"] for x in ex)
-    with st.expander(f"Exercise: {fnum(burned)} kcal burned"):
+    with st.expander("Exercise"):
         name = st.selectbox("Activity", list(EXERCISES), key="np_ex_name")
         minutes = st.number_input("Minutes", min_value=1, max_value=300, value=30, step=5, key="np_ex_min")
         kcal = round(EXERCISES[name] * minutes)

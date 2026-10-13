@@ -28,7 +28,7 @@ def wait_http(url, timeout=60):
 
 
 @contextlib.contextmanager
-def running_app(app_port=8601, mock_port=8765, use_mock=True, extra_env=None):
+def running_app(app_port=8601, mock_port=8765, use_mock=True, extra_env=None, script="nutrition_tracker.py"):
     env = dict(os.environ, PYTHONUTF8="1", STREAMLIT_BROWSER_GATHER_USAGE_STATS="false")
     tmp = tempfile.mkdtemp(prefix="nutripulse_ux_")
     env["NUTRIPULSE_DB"] = str(Path(tmp) / "feedback.sqlite")
@@ -41,7 +41,7 @@ def running_app(app_port=8601, mock_port=8765, use_mock=True, extra_env=None):
         procs.append(subprocess.Popen([sys.executable, str(ROOT / "tools/ux/mock_api.py"), str(mock_port)], env=env))
     env.update(extra_env or {})
     procs.append(subprocess.Popen(
-        [sys.executable, "-m", "streamlit", "run", "nutrition_tracker.py", "--server.port", str(app_port),
+        [sys.executable, "-m", "streamlit", "run", script, "--server.port", str(app_port),
          "--server.headless", "true", "--browser.gatherUsageStats", "false"],
         cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
     try:
