@@ -90,3 +90,14 @@ def test_search_food_returns_none_when_nothing_found(monkeypatch):
 ])
 def test_parse_serving(text, expected):
     assert parse_serving(text) == expected
+
+
+def test_weights_default_reproduces_score_and_zero_weight_disables_term():
+    from nutripulse.matching import ABLATION_GROUPS, DEFAULT_WEIGHTS, score_terms
+    f = food("Bread, oatmeal", 280)
+    q = query_words("oatmeal")
+    terms = score_terms(f, q)
+    assert _score(f, q) == pytest.approx(sum(DEFAULT_WEIGHTS[k] * v for k, v in terms.items()))
+    assert set(DEFAULT_WEIGHTS) >= {t for g in ABLATION_GROUPS.values() for t in g}
+    off = dict(DEFAULT_WEIGHTS, first_mismatch=0.0)
+    assert _score(f, q, off) - _score(f, q) == pytest.approx(8.0)

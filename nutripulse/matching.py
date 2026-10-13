@@ -83,35 +83,59 @@ def query_words(query: str) -> list:
     return [w.lower() for w in re.split(r"\s+", query.strip()) if w]
 
 
-def _score(food: dict, q_words: list) -> float:
+# Weight of each scoring term. Every term is a 0/1 indicator except word_hits (a count)
+# and brevity (description length / 200), so score = sum(weight * term).
+DEFAULT_WEIGHTS = {
+    "starts_with": 10.0, "in_first_tokens": 5.0, "word_hits": 1.0,
+    "cooked_bonus": 4.0, "raw_penalty": -3.0, "first_mismatch": -8.0,
+    "wrong_category": -10.0, "calorie_penalty": -50.0, "brevity": -1.0,
+}
+# Ablation groups: the cooked/raw heuristic is one idea implemented as two terms.
+ABLATION_GROUPS = {
+    "starts_with": ["starts_with"], "in_first_tokens": ["in_first_tokens"],
+    "cooked_raw": ["cooked_bonus", "raw_penalty"], "first_mismatch": ["first_mismatch"],
+    "wrong_category": ["wrong_category"], "calorie_penalty": ["calorie_penalty"], "brevity": ["brevity"],
+}
+
+
+def score_terms(food: dict, q_words: list) -> dict:
+    """Unweighted value of every scoring term for one candidate."""
     desc = food.get("description", "").lower()
     tokens = re.split(r"[\s,]+", desc)
     all_present = all(re.search(rf"\b{re.escape(w)}\b", desc) for w in q_words)
-    starts_with = 10 if (q_words and tokens and tokens[0] == q_words[0] and all_present) else 0
+    starts_with = 1 if (q_words and tokens and tokens[0] == q_words[0] and all_present) else 0
     n = max(len(q_words) + 1, 3)
     first_token_relevant = bool(tokens and tokens[0] in q_words)
-    in_first_tokens = 5 if (first_token_relevant and all(w in tokens[:n] for w in q_words)) else 0
+    in_first_tokens = 1 if (first_token_relevant and all(w in tokens[:n] for w in q_words)) else 0
     word_hits = sum(1 for w in q_words if re.search(rf"\b{re.escape(w)}\b", desc))
     is_raw_food = any(rw in " ".join(q_words) for rw in RAW_FOODS)
     user_specified_prep = any(w in q_words for w in ("raw", "cooked", "baked", "grilled", "boiled", "fried", "roasted"))
     if not is_raw_food and not user_specified_prep:
-        cooked_bonus = 4 if "cooked" in desc else 0
-        raw_penalty = -3 if re.search(r"\braw\b", desc) else 0
+        cooked_bonus = 1 if "cooked" in desc else 0
+        raw_penalty = 1 if re.search(r"\braw\b", desc) else 0
     else:
         cooked_bonus = raw_penalty = 0
-    first_mismatch = -8 if (tokens and tokens[0] not in q_words) else 0
+    first_mismatch = 1 if (tokens and tokens[0] not in q_words) else 0
     wrong_category = 0
     if first_mismatch and q_words:
         segs = [s.strip() for s in desc.split(",")]
         if (len(segs) > 1
                 and not any(re.search(rf"\b{re.escape(w)}\b", segs[0]) for w in q_words)
                 and any(re.search(rf"\b{re.escape(w)}\b", sg) for w in q_words for sg in segs[1:])):
-            wrong_category = -10
+            wrong_category = 1
     nutrients = {n_["nutrientId"]: n_.get("value", 0) for n_ in food.get("foodNutrients", [])}
-    calorie_penalty = -50 if nutrients.get(NUTRIENT_IDS["calories"], 0) > MAX_SANE_CALORIES else 0
-    brevity = -len(desc) / 200
-    return (starts_with + in_first_tokens + word_hits + cooked_bonus + raw_penalty
-            + first_mismatch + wrong_category + calorie_penalty + brevity)
+    calorie_penalty = 1 if nutrients.get(NUTRIENT_IDS["calories"], 0) > MAX_SANE_CALORIES else 0
+    return {
+        "starts_with": starts_with, "in_first_tokens": in_first_tokens, "word_hits": word_hits,
+        "cooked_bonus": cooked_bonus, "raw_penalty": raw_penalty, "first_mismatch": first_mismatch,
+        "wrong_category": wrong_category, "calorie_penalty": calorie_penalty, "brevity": len(desc) / 200,
+    }
+
+
+def _score(food: dict, q_words: list, weights: dict | None = None) -> float:
+    w = weights or DEFAULT_WEIGHTS
+    terms = score_terms(food, q_words)
+    return sum(w[k] * v for k, v in terms.items())
 
 
 def best_match(foods: list, query: str) -> tuple:
@@ -120,14 +144,17 @@ def best_match(foods: list, query: str) -> tuple:
     return max(scored, key=lambda x: x[1])
 
 
+def candidate_lists(query: str) -> list:
+    """USDA results per data-type call, in API order. Falls back to one untyped call."""
+    lists = [apis.usda_fetch(query, dt) for dt in USDA_DATA_TYPES]
+    if not any(lists):
+        lists = [apis.usda_fetch(query, None)]
+    return lists
+
+
 def collect_candidates(query: str) -> list:
     """All USDA candidates the app considers, in API order."""
-    foods: list = []
-    for dt in USDA_DATA_TYPES:
-        foods.extend(apis.usda_fetch(query, dt))
-    if not foods:
-        foods = apis.usda_fetch(query, None)
-    return foods
+    return [f for lst in candidate_lists(query) for f in lst]
 
 
 def to_result(food: dict, match_score: float, query: str) -> dict:
