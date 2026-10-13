@@ -1,0 +1,1 @@
+{"service": "usda", "params": {"query": "salad", "pageSize": 8, "dataType": "Foundation"}, "saved_at": 1791923106.9696066, "payload": {"foods": [{"fdcId": 2758987, "description": "Salad dressing, Italian dressing, commercial, regular", "dataType": "Foundation", "foodNutrients": []}]}}

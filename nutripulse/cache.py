@@ -14,6 +14,8 @@ class CallStats:
     def reset(self):
         self.api_calls = 0
         self.cache_hits = 0
+        self.errors = 0
+        self.retries = 0
         self.latencies_ms = []
 
     def record_call(self, elapsed_ms: float | None = None):
@@ -33,7 +35,7 @@ class CallStats:
         return self.cache_hits / self.lookups if self.lookups else 0.0
 
     def as_dict(self) -> dict:
-        return {"api_calls": self.api_calls, "cache_hits": self.cache_hits,
+        return {"api_calls": self.api_calls, "cache_hits": self.cache_hits, "errors": self.errors, "retries": self.retries,
                 "lookups": self.lookups, "hit_rate": round(self.hit_rate, 4)}
 
 

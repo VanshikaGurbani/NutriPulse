@@ -10,6 +10,7 @@ from nutripulse.cache import DiskCache, stats
 class FakeResp:
     def __init__(self, payload, status=200):
         self.payload, self.status = payload, status
+        self.status_code = status
 
     def raise_for_status(self):
         if self.status >= 400:
@@ -32,7 +33,7 @@ def fake_get(monkeypatch, payload, status=200):
 
 def test_usda_fetch_returns_foods_and_sets_timeout(monkeypatch):
     calls = fake_get(monkeypatch, {"foods": [{"fdcId": 1}]})
-    assert apis.usda_fetch("rice", "SR Legacy") == [{"fdcId": 1}]
+    assert [f["fdcId"] for f in apis.usda_fetch("rice", "SR Legacy")] == [1]
     assert calls[0]["timeout"] == apis.TIMEOUT_S and calls[0]["params"]["dataType"] == "SR Legacy"
     assert stats.api_calls == 1
 
@@ -123,3 +124,27 @@ def test_call_budget_blocks_live_calls_but_not_cache_hits(monkeypatch, tmp_path)
 def test_template_placeholder_keys_count_as_missing(monkeypatch):
     monkeypatch.setenv("USDA_API_KEY", "your_usda_api_key_here")
     assert apis.usda_key() is None
+
+
+def test_usda_retries_intermittent_400_then_succeeds(monkeypatch):
+    seq = [FakeResp({}, 400), FakeResp({}, 400), FakeResp({"foods": [{"fdcId": 9}]}, 200)]
+    monkeypatch.setattr(apis._http, "get", lambda *a, **k: seq.pop(0))
+    assert [f["fdcId"] for f in apis.usda_fetch("muffin", "Survey (FNDDS)")] == [9]
+    assert stats.api_calls == 3 and stats.retries == 2 and stats.errors == 0
+
+
+def test_usda_persistent_400_is_counted_not_cached(monkeypatch, tmp_path):
+    apis.configure_cache(DiskCache(tmp_path))
+    monkeypatch.setattr(apis._http, "get", lambda *a, **k: FakeResp({}, 400))
+    assert apis.usda_fetch("muffin", "Survey (FNDDS)") == []
+    assert stats.errors == 1 and stats.api_calls == apis.USDA_400_RETRIES + 1
+    assert not list(tmp_path.iterdir())
+
+
+def test_slim_usda_keeps_scorer_fields_and_drops_the_rest():
+    raw = {"foods": [{"fdcId": 5, "description": "Rice", "dataType": "SR Legacy", "brandOwner": "x", "ingredients": "y",
+                      "foodNutrients": [{"nutrientId": 1008, "value": 130, "unitName": "KCAL"},
+                                        {"nutrientId": 1087, "value": 10}]}]}
+    out = apis.slim_usda(raw)["foods"][0]
+    assert out == {"fdcId": 5, "description": "Rice", "dataType": "SR Legacy",
+                   "foodNutrients": [{"nutrientId": 1008, "value": 130}]}

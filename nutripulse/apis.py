@@ -58,8 +58,12 @@ def _session() -> requests.Session:
 _http = _session()
 
 
-def _get_json(service: str, url: str, params: dict, headers: dict | None = None):
-    """GET with disk-cache lookup, timeout, retries and call accounting."""
+USDA_400_RETRIES = 4   # USDA intermittently answers 400 (nginx HTML) to valid dataType searches, ~40% for "Survey (FNDDS)"
+
+
+def _get_json(service: str, url: str, params: dict, headers: dict | None = None, retry_400: int = 0, transform=None):
+    """GET with disk-cache lookup, timeout, retries and call accounting.
+    retry_400: extra attempts when the server answers 400 (a known USDA flake, not a client error)."""
     if _disk_cache is not None:
         hit = _disk_cache.get(service, params)
         if hit is not None:
@@ -68,14 +72,38 @@ def _get_json(service: str, url: str, params: dict, headers: dict | None = None)
     if _call_budget is not None and stats.api_calls >= _call_budget:
         raise BudgetExceeded(f"live API call budget of {_call_budget} reached; "
                              "re-run with a higher --max-calls only after confirming quota")
-    t0 = time.perf_counter()
-    resp = _http.get(url, params=params, headers=headers, timeout=TIMEOUT_S)
-    stats.record_call((time.perf_counter() - t0) * 1000)
-    resp.raise_for_status()
+    for attempt in range(retry_400 + 1):
+        if _call_budget is not None and stats.api_calls >= _call_budget:
+            raise BudgetExceeded(f"live API call budget of {_call_budget} reached")
+        t0 = time.perf_counter()
+        resp = _http.get(url, params=params, headers=headers, timeout=TIMEOUT_S)
+        stats.record_call((time.perf_counter() - t0) * 1000)
+        if resp.status_code != 400 or attempt == retry_400:
+            break
+        stats.retries += 1
+    try:
+        resp.raise_for_status()
+    except requests.HTTPError:
+        stats.errors += 1
+        raise
     payload = resp.json()
+    if transform:
+        payload = transform(payload)
     if _disk_cache is not None:
         _disk_cache.put(service, params, payload)
     return payload
+
+
+_KEEP_NUTRIENTS = {1008, 2047, 1003, 1004, 1005, 1079}   # kcal, kcal (Atwater), protein, fat, carbs, fiber
+
+
+def slim_usda(payload: dict) -> dict:
+    """Keep only the fields the app and benchmark read, so cached responses stay small."""
+    foods = [{"fdcId": f.get("fdcId"), "description": f.get("description", ""), "dataType": f.get("dataType", ""),
+              "foodNutrients": [{"nutrientId": n["nutrientId"], "value": n.get("value", 0)}
+                                for n in f.get("foodNutrients", []) if n.get("nutrientId") in _KEEP_NUTRIENTS]}
+             for f in payload.get("foods", [])]
+    return {"foods": foods}
 
 
 def usda_fetch(query: str, data_type, page_size: int = 8) -> list:
@@ -85,7 +113,8 @@ def usda_fetch(query: str, data_type, page_size: int = 8) -> list:
     if data_type:
         params["dataType"] = data_type
     try:
-        return _get_json("usda", f"{USDA_BASE}/foods/search", params).get("foods", [])
+        return _get_json("usda", f"{USDA_BASE}/foods/search", params, retry_400=USDA_400_RETRIES,
+                         transform=slim_usda).get("foods", [])
     except requests.HTTPError:
         return []
 

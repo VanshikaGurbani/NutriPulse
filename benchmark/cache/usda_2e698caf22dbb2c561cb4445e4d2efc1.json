@@ -1,0 +1,1 @@
+{"service": "usda", "params": {"query": "pepperoni pizza", "pageSize": 8, "dataType": "Foundation"}, "saved_at": 1791923065.095844, "payload": {"foods": [{"fdcId": 2759006, "description": "Pepperoni, beef and pork, sliced", "dataType": "Foundation", "foodNutrients": []}]}}
