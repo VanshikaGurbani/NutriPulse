@@ -18,7 +18,7 @@
 
 NutriPulse is a full-featured, beautifully designed nutrition tracker built with **Streamlit** and powered by two nutrition APIs. Type natural phrases like *"2 cups white rice with carrots"* and instantly get accurate macro breakdowns, calorie tracking, exercise logging, and personalized insights — all in one clean interface.
 
-> Built as a course project, NutriPulse demonstrates real-world API integration, data visualization, and modern UI design patterns within a Python web app.
+> Built as a personal project, NutriPulse demonstrates real-world API integration, data visualization, and modern UI design patterns within a Python web app.
 
 ---
 
