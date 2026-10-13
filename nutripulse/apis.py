@@ -22,6 +22,24 @@ _disk_cache: DiskCache | None = None
 _call_budget: int | None = None
 
 
+class ServiceError(RuntimeError):
+    """A nutrition API could not be reached or refused us. `kind` is rate_limit, timeout or unavailable."""
+
+    MESSAGES = {
+        "rate_limit": "The nutrition database is busy (rate limit reached). Wait a minute and try again, or pick a recent food.",
+        "timeout": "The nutrition database took too long to answer. Check your connection and try again.",
+        "unavailable": "The nutrition database could not be reached right now. Please try again shortly.",
+    }
+
+    def __init__(self, kind: str):
+        super().__init__(kind)
+        self.kind = kind
+
+    @property
+    def user_message(self) -> str:
+        return self.MESSAGES.get(self.kind, self.MESSAGES["unavailable"])
+
+
 class BudgetExceeded(RuntimeError):
     """Raised before a live request would exceed the configured call budget."""
 
@@ -76,15 +94,27 @@ def _get_json(service: str, url: str, params: dict, headers: dict | None = None,
         if _call_budget is not None and stats.api_calls >= _call_budget:
             raise BudgetExceeded(f"live API call budget of {_call_budget} reached")
         t0 = time.perf_counter()
-        resp = _http.get(url, params=params, headers=headers, timeout=TIMEOUT_S)
+        try:
+            resp = _http.get(url, params=params, headers=headers, timeout=TIMEOUT_S)
+        except requests.Timeout as e:
+            stats.errors += 1
+            raise ServiceError("timeout") from e
+        except requests.exceptions.RetryError as e:
+            stats.errors += 1
+            raise ServiceError("rate_limit" if "429" in str(e) else "unavailable") from e
+        except requests.ConnectionError as e:
+            stats.errors += 1
+            raise ServiceError("unavailable") from e
         stats.record_call((time.perf_counter() - t0) * 1000)
         if resp.status_code != 400 or attempt == retry_400:
             break
         stats.retries += 1
     try:
         resp.raise_for_status()
-    except requests.HTTPError:
+    except requests.HTTPError as e:
         stats.errors += 1
+        if resp.status_code == 429:
+            raise ServiceError("rate_limit") from e
         raise
     payload = resp.json()
     if transform:

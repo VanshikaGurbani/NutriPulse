@@ -1,5 +1,6 @@
 """Query parsing and USDA relevance scoring."""
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from . import apis
 from .apis import NUTRIENT_IDS
@@ -144,17 +145,22 @@ def best_match(foods: list, query: str) -> tuple:
     return max(scored, key=lambda x: x[1])
 
 
-def candidate_lists(query: str) -> list:
-    """USDA results per data-type call, in API order. Falls back to one untyped call."""
-    lists = [apis.usda_fetch(query, dt) for dt in USDA_DATA_TYPES]
+def candidate_lists(query: str, parallel: bool = False) -> list:
+    """USDA results per data-type call, in API order. Falls back to one untyped call.
+    parallel=True issues the typed searches concurrently (the app path); the result is identical."""
+    if parallel:
+        with ThreadPoolExecutor(max_workers=len(USDA_DATA_TYPES)) as pool:
+            lists = list(pool.map(lambda dt: apis.usda_fetch(query, dt), USDA_DATA_TYPES))
+    else:
+        lists = [apis.usda_fetch(query, dt) for dt in USDA_DATA_TYPES]
     if not any(lists):
         lists = [apis.usda_fetch(query, None)]
     return lists
 
 
-def collect_candidates(query: str) -> list:
+def collect_candidates(query: str, parallel: bool = False) -> list:
     """All USDA candidates the app considers, in API order."""
-    return [f for lst in candidate_lists(query) for f in lst]
+    return [f for lst in candidate_lists(query, parallel) for f in lst]
 
 
 def to_result(food: dict, match_score: float, query: str) -> dict:
@@ -178,8 +184,16 @@ def to_result(food: dict, match_score: float, query: str) -> dict:
     }
 
 
-def search_food(query: str):
-    foods = collect_candidates(query)
+def ranked_candidates(query: str, k: int = 5, parallel: bool = False) -> list:
+    """Top-k USDA candidates as (food, score), best first (stable on ties, like best_match)."""
+    foods = collect_candidates(query, parallel)
+    q_words = query_words(query)
+    scored = sorted(((f, _score(f, q_words)) for f in foods), key=lambda x: -x[1])
+    return scored[:k]
+
+
+def search_food(query: str, parallel: bool = False):
+    foods = collect_candidates(query, parallel)
     if not foods:
         return None
     food, match_score = best_match(foods, query)

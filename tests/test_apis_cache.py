@@ -148,3 +148,25 @@ def test_slim_usda_keeps_scorer_fields_and_drops_the_rest():
     out = apis.slim_usda(raw)["foods"][0]
     assert out == {"fdcId": 5, "description": "Rice", "dataType": "SR Legacy",
                    "foodNutrients": [{"nutrientId": 1008, "value": 130}]}
+
+
+@pytest.mark.parametrize("exc,kind", [
+    (requests.Timeout(), "timeout"),
+    (requests.ConnectionError(), "unavailable"),
+    (requests.exceptions.RetryError("too many 429 error responses"), "rate_limit"),
+    (requests.exceptions.RetryError("too many 503 error responses"), "unavailable"),
+])
+def test_network_failures_become_typed_service_errors(monkeypatch, exc, kind):
+    def boom(*a, **k):
+        raise exc
+    monkeypatch.setattr(apis._http, "get", boom)
+    with pytest.raises(apis.ServiceError) as e:
+        apis.usda_fetch("rice", None)
+    assert e.value.kind == kind and e.value.user_message
+
+
+def test_http_429_is_a_rate_limit_error(monkeypatch):
+    fake_get(monkeypatch, {}, status=429)
+    with pytest.raises(apis.ServiceError) as e:
+        apis.usda_fetch("rice", None)
+    assert e.value.kind == "rate_limit"

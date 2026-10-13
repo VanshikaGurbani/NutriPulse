@@ -101,3 +101,19 @@ def test_weights_default_reproduces_score_and_zero_weight_disables_term():
     assert set(DEFAULT_WEIGHTS) >= {t for g in ABLATION_GROUPS.values() for t in g}
     off = dict(DEFAULT_WEIGHTS, first_mismatch=0.0)
     assert _score(f, q, off) - _score(f, q) == pytest.approx(8.0)
+
+
+def test_parallel_candidate_lists_match_sequential(monkeypatch):
+    from nutripulse import apis, matching
+    data = {"Foundation": [food("A", 1, fdc_id=1)], "Survey (FNDDS)": [food("B", 2, fdc_id=2)], "SR Legacy": [food("C", 3, fdc_id=3)]}
+    monkeypatch.setattr(apis, "usda_fetch", lambda q, dt, page_size=8: data[dt])
+    assert matching.candidate_lists("x", parallel=True) == matching.candidate_lists("x", parallel=False)
+
+
+def test_ranked_candidates_best_first_and_first_equals_best_match(monkeypatch):
+    from nutripulse import apis, matching
+    foods = [food("Bread, oatmeal", 280, fdc_id=1), food("Oatmeal, cooked", 71, fdc_id=2), food("Cookies, oatmeal", 430, fdc_id=3)]
+    monkeypatch.setattr(apis, "usda_fetch", lambda q, dt, page_size=8: foods if dt == "SR Legacy" else [])
+    ranked = matching.ranked_candidates("oatmeal", k=2)
+    assert [f["fdcId"] for f, _ in ranked][0] == matching.best_match(foods, "oatmeal")[0]["fdcId"] == 2
+    assert len(ranked) == 2 and ranked[0][1] >= ranked[1][1]
