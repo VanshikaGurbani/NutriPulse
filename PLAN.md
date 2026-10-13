@@ -19,8 +19,8 @@ Branch: `benchmark-and-ux`. Small commits, app must run after every commit. Noth
 |-------|------|--------|
 | 1 | Refactor into `nutripulse/{apis,matching,nutrition,cache}.py`, thin UI, disk/TTL cache, call counters | **done** (commits a7c6ee3, 23fe15a; verified identical to old code on 700+ inputs) |
 | 2 | pytest suite (44 tests, no live calls), ruff, GitHub Actions + README badge | **done locally**; the CI run itself has not executed because nothing is pushed |
-| 3 | Benchmark harness: queries.csv skeleton, labeling-sheet generator, run_benchmark.py (naive vs scorer vs CalorieNinjas), bootstrap CIs, dev/test discipline, ablation, meals MAPE, ops metrics, charts | harness buildable now, **numbers blocked on B1/B2/B4** |
-| 4 | Thumbs up/down + SQLite feedback + admin view | pending |
+| 3 | Benchmark harness (queries, labeling sheet, label import, kappa, dev-only tuning, test-only report, ablation, meals MAPE, ops metrics, charts) | **code done + tested on synthetic data**; numbers blocked on B1/B2/B4 |
+| 4 | Thumbs up/down + SQLite feedback + admin view (`?admin=1`) | **done** (store tested, UI driven headlessly) |
 | 5 | README Results / Methodology, benchmark/CLAIMS.md | CLAIMS only after real results |
 
 ## Task 2: UX overhaul with before/after measurement

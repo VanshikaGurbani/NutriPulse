@@ -3,7 +3,7 @@ import datetime
 import plotly.graph_objects as go
 import streamlit as st
 
-from nutripulse import apis
+from nutripulse import apis, feedback
 from nutripulse.cache import stats
 from nutripulse.matching import UNIT_TO_GRAMS, UNITS, clean_food_name, parse_serving, search_food
 from nutripulse.nutrition import ACTIVITY_LEVELS, calc_tdee, nutrition_grade, smart_tips
@@ -233,6 +233,7 @@ if "water_goal_ml" not in _ss: _ss.water_goal_ml  = 2000
 if "recent_foods"  not in _ss: _ss.recent_foods   = []   # list of (input_str, result_dict)
 if "history"       not in _ss: _ss.history        = []   # list of daily summary dicts
 if "food_input"    not in _ss: _ss.food_input      = ""
+if "feedback_given" not in _ss: _ss.feedback_given = set()
 if "cmp_r1"        not in _ss: _ss.cmp_r1         = None
 if "cmp_r2"        not in _ss: _ss.cmp_r2         = None
 if "profile"       not in _ss:
@@ -475,6 +476,23 @@ with tab1:
             fig_item = macro_bar_fig(carbs, prot, fat)
             if fig_item:
                 st.plotly_chart(fig_item, use_container_width=True)
+
+            # Thumbs up/down on the match; logged locally for future real-use metrics (not a benchmark result)
+            fb_key = (_ss.last_input, r.get("description"))
+            fb_c1, fb_c2, fb_c3 = st.columns([3, 1, 1])
+            fb_c1.caption("Was this the right food?")
+            if fb_key in _ss.feedback_given:
+                fb_c2.caption("Thanks!")
+            else:
+                for fb_col, fb_val, fb_label in ((fb_c2, 1, "👍"), (fb_c3, -1, "👎")):
+                    if fb_col.button(fb_label, key=f"fb_{fb_val}", help="Yes, this match is right" if fb_val == 1 else "No, wrong match"):
+                        try:
+                            feedback.log_feedback(_ss.last_input, "calorieninjas" if "CalorieNinjas" in r.get("source", "") else "usda",
+                                                  r.get("fdc_id"), r.get("score"), fb_val)
+                        except Exception:
+                            pass   # feedback is best-effort; never break the app
+                        _ss.feedback_given.add(fb_key)
+                        st.rerun()
 
             meal_idx = MEALS.index(_ss.selected_meal) if _ss.selected_meal in MEALS else 0
             selected_meal = st.radio("Meal", MEALS, index=meal_idx, horizontal=True,
@@ -854,6 +872,25 @@ with tab4:
         else:
             st.markdown("<span style='color:#888;font-size:0.9rem'>No history saved yet. Log food and tap <b>Save Today's Summary</b>.</span>",
                         unsafe_allow_html=True)
+
+# ── Admin (hidden unless ?admin=1) ────────────────────────────────────────────
+if st.query_params.get("admin") == "1":
+    with st.expander("📈 Match feedback (admin)", expanded=True):
+        try:
+            fs = feedback.summary()
+            if fs["total"] == 0:
+                st.info("No feedback recorded yet.")
+            else:
+                st.metric("Match-confirmed rate", f"{fs['confirmed_rate']:.0%}", help=f"{fs['up']} up / {fs['total']} votes")
+                st.caption(f"{fs['total']} votes recorded in this app instance's local SQLite file. "
+                           "Small samples from a handful of users are not a reliable accuracy estimate.")
+                st.dataframe([{"source": k, "up": v["up"], "votes": v["total"]} for k, v in fs["by_source"].items()],
+                             hide_index=True)
+                if fs["recent_down"]:
+                    st.dataframe([dict(zip(("time", "query", "source", "fdc_id", "score"), row)) for row in fs["recent_down"]],
+                                 hide_index=True)
+        except Exception as e:
+            st.warning(f"Feedback store unavailable: {e}")
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("""
