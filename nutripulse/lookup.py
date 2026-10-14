@@ -45,15 +45,19 @@ def lookup_meal(query: str, parallel: bool = True) -> dict | None:
                 continue
             out.append({"name": i["name"].title(), "query_name": i["name"], "grams": round(i["serving_size_g"], 1),
                         "source": "CalorieNinjas", "source_detail": "NLP-parsed", "confidence": "nlp", "fdc_id": None,
-                        "score": None, "per100": _per100_from_cn(i)})
+                        "score": None, "per100": _per100_from_cn(i), "amount_known": True})
         if out:
             return {"path": "calorieninjas", "items": out}
-    qty, unit, name = matching.parse_serving(query)
+    amt = matching.parse_amount(query)
+    name = amt["name"]
     ranked = matching.ranked_candidates(name, 5, parallel)
     if not ranked:
         return None
     food, score = ranked[0]
-    item = usda_item(matching.to_result(food, score, name), name, qty * matching.UNIT_TO_GRAMS.get(unit, 1.0))
+    # When the weight was not stated (a bare count, a slice, no amount) we show 100 g, the basis USDA values are listed for,
+    # flag it, and make the person confirm or change it. We never invent a weight for "1 banana".
+    item = usda_item(matching.to_result(food, score, name), name, amt["grams"] if amt["known"] else 100.0)
+    item.update(amount_known=amt["known"], amount_hint=amt["hint"], amount_approx=amt["approx"])
     item["alternatives"] = [_alt_record(f, sc, name) for f, sc in ranked]     # free: same candidate list, no extra API call
     return {"path": "usda", "items": [item]}
 

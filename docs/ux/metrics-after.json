@@ -1,6 +1,6 @@
 {
   "version": "after",
-  "date": "2026-10-13 16:58",
+  "date": "2026-10-13 23:16",
   "interaction": {
     "375": [
       {
@@ -8,33 +8,33 @@
         "search_box_y_px": 167,
         "autofocused": false,
         "scroll_gestures": 2,
-        "search_ms_cold": 1363,
+        "search_ms_cold": 1481,
         "clicks": 2,
         "keystrokes": 30,
         "viewport": "375",
-        "first_load_ms": 2167
+        "first_load_ms": 3068
       },
       {
         "search_in_first_screen": true,
         "search_box_y_px": 167,
         "autofocused": false,
         "scroll_gestures": 2,
-        "search_ms_cold": 115,
+        "search_ms_cold": 866,
         "clicks": 2,
         "keystrokes": 30,
         "viewport": "375",
-        "first_load_ms": 1452
+        "first_load_ms": 1648
       },
       {
         "search_in_first_screen": true,
         "search_box_y_px": 167,
         "autofocused": false,
         "scroll_gestures": 2,
-        "search_ms_cold": 153,
+        "search_ms_cold": 460,
         "clicks": 2,
         "keystrokes": 30,
         "viewport": "375",
-        "first_load_ms": 1459
+        "first_load_ms": 1853
       }
     ],
     "1280": [
@@ -43,50 +43,44 @@
         "search_box_y_px": 137,
         "autofocused": true,
         "scroll_gestures": 1,
-        "search_ms_cold": 875,
+        "search_ms_cold": 1403,
         "clicks": 1,
         "keystrokes": 30,
         "viewport": "1280",
-        "first_load_ms": 2181
+        "first_load_ms": 2344
       },
       {
         "search_in_first_screen": true,
         "search_box_y_px": 137,
         "autofocused": true,
         "scroll_gestures": 1,
-        "search_ms_cold": 150,
+        "search_ms_cold": 267,
         "clicks": 1,
         "keystrokes": 30,
         "viewport": "1280",
-        "first_load_ms": 1511
+        "first_load_ms": 1977
       },
       {
         "search_in_first_screen": true,
         "search_box_y_px": 137,
         "autofocused": true,
         "scroll_gestures": 1,
-        "search_ms_cold": 153,
+        "search_ms_cold": 229,
         "clicks": 1,
         "keystrokes": 30,
         "viewport": "1280",
-        "first_load_ms": 1457
+        "first_load_ms": 1812
       }
     ]
   },
   "latency": {
-    "load_cold_ms": 2181,
-    "load_warm_ms": 1020,
-    "repeat_search_ms": 169
+    "load_cold_ms": 2316,
+    "load_warm_ms": 1228,
+    "repeat_search_ms": 254
   },
   "axe": {
     "per_tab": {
       "Today": [
-        {
-          "id": "color-contrast",
-          "impact": "serious",
-          "nodes": 1,
-          "help": "Elements must meet minimum color contrast ratio thresholds"
-        },
         {
           "id": "region",
           "impact": "moderate",
@@ -137,12 +131,12 @@
         }
       ]
     },
-    "violation_rules_total": 8,
-    "violating_nodes_total": 49,
+    "violation_rules_total": 7,
+    "violating_nodes_total": 48,
     "rules_by_impact": {
-      "serious": 2,
       "moderate": 4,
-      "critical": 2
+      "critical": 2,
+      "serious": 1
     }
   },
   "lighthouse": {

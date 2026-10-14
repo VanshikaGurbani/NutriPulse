@@ -17,7 +17,7 @@ RAW_FOODS = {
 
 UNIT_TO_GRAMS = {
     "g": 1.0, "kg": 1000.0, "oz": 28.35, "lb": 453.6,
-    "cup": 240.0, "tbsp": 15.0, "tsp": 5.0, "ml": 1.0,
+    "cup": 240.0, "tbsp": 15.0, "tsp": 5.0, "ml": 1.0, "l": 1000.0,
     "piece": 100.0, "slice": 30.0,
 }
 UNITS = list(UNIT_TO_GRAMS.keys())
@@ -34,45 +34,74 @@ SOURCE_BADGES = {
 USDA_DATA_TYPES = ["Foundation", "Survey (FNDDS)", "SR Legacy"]
 
 
-def parse_serving(text: str):
-    text = text.strip()
-    match = re.match(
-        r"^(\d+(?:\.\d+)?(?:/\d+)?)\s*"
-        r"(cups?|tbsps?|tsps?|fl\.?\s*oz|oz"
-        r"|kg|lbs?|g|ml|l|pieces?|slices?)?\s*"
-        r"(?:of\s+)?(.+)$",
-        text, flags=re.IGNORECASE,
-    )
-    if not match:
-        return 100.0, "g", clean_food_name(text)
-    qty_str, unit_str, food = match.groups()
-    if "/" in qty_str:
-        n, d = qty_str.split("/")
-        qty = float(n) / float(d)
-    else:
-        qty = float(qty_str)
-    if unit_str:
-        u = unit_str.lower().strip()
-        if re.match(r"fl\.?\s*oz", u):
-            unit = "oz"
-        elif u.startswith("cup"):
-            unit = "cup"
-        elif u.startswith("tbsp"):
-            unit = "tbsp"
-        elif u.startswith("tsp"):
-            unit = "tsp"
-        elif u.startswith("lb"):
-            unit = "lb"
-        elif u.startswith("piece"):
-            unit = "piece"
-        elif u.startswith("slice"):
-            unit = "slice"
+# Unit spellings people type, mapped to the keys of UNIT_TO_GRAMS.
+_UNIT_ALIASES = {
+    "g": "g", "gm": "g", "gram": "g", "grams": "g", "kg": "kg", "kilogram": "kg", "kilograms": "kg",
+    "oz": "oz", "ounce": "oz", "ounces": "oz", "lb": "lb", "lbs": "lb", "pound": "lb", "pounds": "lb",
+    "cup": "cup", "cups": "cup", "tbsp": "tbsp", "tbsps": "tbsp", "tablespoon": "tbsp", "tablespoons": "tbsp",
+    "tsp": "tsp", "tsps": "tsp", "teaspoon": "tsp", "teaspoons": "tsp",
+    "ml": "ml", "milliliter": "ml", "milliliters": "ml", "millilitre": "ml", "millilitres": "ml",
+    "l": "l", "liter": "l", "liters": "l", "litre": "l", "litres": "l",
+    "piece": "piece", "pieces": "piece", "slice": "slice", "slices": "slice",
+}
+# Units whose weight depends on the food: the app cannot know them, so it must ask instead of guessing.
+FOOD_DEPENDENT_UNITS = {"piece", "slice"}
+# Volume units are converted as if the food weighed the same as water (an approximation worth saying out loud).
+VOLUME_UNITS = {"cup", "tbsp", "tsp", "ml", "l"}
+
+_UNIT_RE = r"fl\.?\s*oz|" + "|".join(sorted((re.escape(k) for k in _UNIT_ALIASES), key=len, reverse=True))
+_SERVING_RE = re.compile(
+    rf"^(\d+\s+\d+/\d+|\d+(?:\.\d+)?(?:/\d+)?)\s*(?:({_UNIT_RE})(?=\s|$))?\s*(?:of\s+)?(.+)$", flags=re.IGNORECASE)
+
+
+def _quantity(qty_str: str) -> float:
+    parts = qty_str.split()
+    total = 0.0
+    for part in parts:
+        if "/" in part:
+            n, d = part.split("/")
+            total += float(n) / float(d)
         else:
-            unit = u.rstrip("s") if u.endswith("s") and u not in ("oz", "ml") else u
-            unit = unit if unit in UNIT_TO_GRAMS else "g"
-    else:
-        unit = "g"
-    return qty, unit, clean_food_name(food)
+            total += float(part)
+    return total
+
+
+def _canonical_unit(unit_str):
+    if not unit_str:
+        return None
+    u = re.sub(r"\s+", " ", unit_str.lower().strip())
+    if re.match(r"fl\.?\s*oz", u):
+        return "oz"
+    return _UNIT_ALIASES.get(u)
+
+
+def parse_serving(text: str):
+    """(quantity, unit, food name). Missing quantity -> 100 g; missing unit -> grams. Use parse_amount when you
+    need to know whether the amount was actually stated."""
+    m = _SERVING_RE.match(text.strip())
+    if not m:
+        return 100.0, "g", clean_food_name(text)
+    qty_str, unit_str, food = m.groups()
+    return _quantity(qty_str), _canonical_unit(unit_str) or "g", clean_food_name(food)
+
+
+def parse_amount(text: str) -> dict:
+    """Like parse_serving, but honest about what was stated.
+
+    known=True only for mass/volume units (g, oz, cup, tbsp, ml, ...). A bare count ("2 eggs"), a piece/slice, or no amount at all
+    gives known=False and grams=None: the caller must ask the person for a weight rather than invent one.
+    """
+    text = text.strip()
+    m = _SERVING_RE.match(text)
+    if not m:
+        return {"name": clean_food_name(text), "qty": None, "unit": None, "grams": None, "known": False, "approx": False, "hint": text}
+    qty_str, unit_str, food = m.groups()
+    qty, unit, name = _quantity(qty_str), _canonical_unit(unit_str), clean_food_name(food)
+    if unit is None or unit in FOOD_DEPENDENT_UNITS:
+        label = f"{qty:g} {unit + ('s' if qty != 1 else '') + ' of' if unit else ''} {name}".replace("  ", " ").strip()
+        return {"name": name, "qty": qty, "unit": unit, "grams": None, "known": False, "approx": False, "hint": label}
+    return {"name": name, "qty": qty, "unit": unit, "grams": qty * UNIT_TO_GRAMS[unit], "known": True,
+            "approx": unit in VOLUME_UNITS, "hint": text}
 
 
 def clean_food_name(name: str) -> str:

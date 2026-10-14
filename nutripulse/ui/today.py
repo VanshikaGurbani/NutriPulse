@@ -85,6 +85,7 @@ def _new_result(query: str, res: dict) -> dict:
     for it in res["items"]:
         it = dict(it)
         it["uid"] = uuid.uuid4().hex[:8]
+        it["confirmed"] = it.get("amount_known", True)      # an unstated weight must be confirmed before it can be logged
         items.append(it)
     return {"id": uuid.uuid4().hex[:8], "query": query, "path": res["path"], "items": items, "alts": {}}
 
@@ -147,7 +148,8 @@ def _breakdown_table(items: list) -> str:
     rows = []
     for it in items:
         n = lookup.nutrients_for(it)
-        rows.append(f'<tr><td>{esc(it["name"])}</td><td class="num">{lookup.format_amount(it["grams"])} g</td>'
+        unsure = " <b>(confirm)</b>" if not it.get("confirmed", True) else ""
+        rows.append(f'<tr><td>{esc(it["name"])}</td><td class="num">{lookup.format_amount(it["grams"])} g{unsure}</td>'
                     f'<td class="num">{fnum(n["kcal"])}</td><td>{confidence_badge(it.get("confidence"))}<br>{badge(_source_text(it))}</td></tr>')
     tot = lookup.totals(items)
     rows.append(f'<tr><th scope="row">Total</th><td></td><td class="num"><b>{fnum(tot["kcal"])}</b></td><td></td></tr>')
@@ -187,13 +189,21 @@ def _render_item_controls(res: dict, it: dict, many: bool):
         if many:
             st.markdown(f"**{esc(it['name'])}**")
         c1, c2 = st.columns([3, 2], vertical_alignment="bottom")
-        it["grams"] = c1.number_input(f"Amount of {it['name']} (grams)", min_value=1.0, max_value=5000.0, step=5.0,
-                                      value=float(it["grams"]), key=f"np_amt_{res['id']}_{uid}")
+        new_g = c1.number_input(f"Amount of {it['name']} (grams)", min_value=1.0, max_value=5000.0, step=5.0,
+                                value=float(it["grams"]), key=f"np_amt_{res['id']}_{uid}")
+        if abs(new_g - it["grams"]) > 1e-9:
+            it["confirmed"] = True                  # the person typed a weight
+        it["grams"] = new_g
+        if not it.get("confirmed", True) and st.button("Keep 100 g", key=f"np_keep_{res['id']}_{uid}", help="Use 100 g, the amount USDA values are listed for"):
+            it["confirmed"] = True
+            st.rerun(scope="fragment")
         if many and c2.button("Remove", key=f"np_rm_{res['id']}_{uid}", use_container_width=True, help=f"Remove {it['name']} from this meal"):
             res["items"] = [x for x in res["items"] if x["uid"] != uid]
             st.rerun(scope="fragment")
         label = "⚠ Low match: pick another" if low else "Not right? Pick another match"
-        with st.expander(label, expanded=low):
+        # A toggle, not an expander: its state lives in session_state. An expander inside this fragment forgot it was open
+        # after the first full-app rerun (Streamlit remounts it), which closed the list as soon as you picked an option.
+        if st.toggle(label, value=low, key=f"np_show_{res['id']}_{uid}"):
             alts = it.get("alternatives") or res["alts"].get(uid)
             if not alts:
                 if st.button(f"Show other matches for “{it['query_name']}”", key=f"np_alts_{res['id']}_{uid}"):
@@ -226,6 +236,9 @@ def render_result(store):
         if _ss().get("np_toast_inline"):
             st.success(_ss().pop("np_toast_inline"))
         for it in items:
+            if not it.get("confirmed", True):
+                st.warning(f"I can't tell how much “{it.get('amount_hint', it['name'])}” weighs, so I haven't guessed. Enter its weight in grams "
+                           "below, or tap “Keep 100 g” (the amount USDA values are listed for).")
             if it.get("confidence") == "low":
                 st.warning(f"“{it['name']}” may not be the right food. Open “Pick another match” below to choose a better one.")
         st.markdown(_breakdown_table(items), unsafe_allow_html=True)
@@ -239,8 +252,12 @@ def render_result(store):
 
         meal = st.segmented_control("Add to meal", MEALS, default=default_meal(), key=f"np_meal_{res['id']}", selection_mode="single")
         meal = meal or default_meal()
+        if any(it.get("amount_approx") for it in items):
+            muted("Cup and spoon amounts are converted as if the food weighed the same as water, so check the grams.")
+        unconfirmed = any(not it.get("confirmed", True) for it in items)
         c_add, c_fav = st.columns([3, 2], vertical_alignment="center")
-        if c_add.button(f"Add to {meal}", type="primary", use_container_width=True, key=f"np_add_{res['id']}"):
+        if c_add.button(f"Add to {meal}", type="primary", use_container_width=True, key=f"np_add_{res['id']}", disabled=unconfirmed,
+                        help="Confirm the amount above first" if unconfirmed else None):
             ids = store.add_entries(today_str(), [lookup.to_entry(it, meal, res["query"]) for it in items])
             _ss().np_undo = {"kind": "added", "ids": ids, "label": f"{res['query']} to {meal}"}
             _toast_after_rerun(f"Added {res['query']} to {meal}. Undo is above the log.")

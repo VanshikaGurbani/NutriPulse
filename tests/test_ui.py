@@ -114,3 +114,29 @@ def test_skip_setup_leaves_no_goal(env):
     at.run()
     s = Store("user-ui-test").settings()
     assert s["onboarded"] is True and s["calorie_goal"] is None and Store("user-ui-test").profile() is None
+
+
+def test_unknown_weight_blocks_add_until_confirmed(env, monkeypatch):
+    item = dict(RICE_CARROTS["items"][0], name="Bananas, Raw", query_name="banana", grams=100.0, amount_known=False, amount_hint="1 banana",
+                source="USDA", source_detail="🔵 SR Legacy", confidence="high", fdc_id=9, score=12.0)
+    monkeypatch.setattr(lookup, "lookup_meal", lambda q, parallel=True: {"path": "usda", "items": [dict(item)]})
+    at = search(app(), "1 banana")
+    assert not at.exception
+    assert any("haven't guessed" in w.value for w in at.warning)
+    add = next(b for b in at.button if b.label.startswith("Add to "))
+    assert add.disabled
+    next(b for b in at.button if b.label == "Keep 100 g").click()
+    at.run()
+    at.run()    # the app calls st.rerun(scope="fragment") after the click; AppTest does not replay that, a browser does (see e2e_smoke)
+    assert not any("haven't guessed" in w.value for w in at.warning)
+    assert not next(b for b in at.button if b.label.startswith("Add to ")).disabled
+
+
+def test_typing_a_weight_also_confirms(env, monkeypatch):
+    item = dict(RICE_CARROTS["items"][0], grams=100.0, amount_known=False, amount_hint="2 eggs")
+    monkeypatch.setattr(lookup, "lookup_meal", lambda q, parallel=True: {"path": "usda", "items": [dict(item)]})
+    at = search(app(), "2 eggs")
+    assert next(b for b in at.button if b.label.startswith("Add to ")).disabled
+    at.number_input[0].set_value(120.0)
+    at.run()
+    assert not next(b for b in at.button if b.label.startswith("Add to ")).disabled

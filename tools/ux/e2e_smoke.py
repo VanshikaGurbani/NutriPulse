@@ -65,12 +65,33 @@ def main():
         page.get_by_text("Ingredients found").first.wait_for(timeout=20000)
         exp = page.get_by_text("Pick another match").first
         exp.click()
+        page.wait_for_timeout(800)
         radios = page.get_by_role("radio")
-        check("five alternative matches offered", radios.count() >= 5, str(radios.count()))
+        check("five alternative matches offered", page.get_by_role("button", name="Use this match").count() == 1 and radios.count() >= 5, str(radios.count()))
         radios.nth(2).locator("xpath=ancestor::label").click()
-        page.get_by_role("button", name="Use this match").click()
+        try:
+            page.get_by_role("button", name="Use this match").click(timeout=6000)
+        except Exception:
+            page.screenshot(path=str(ROOT / "tools/ux/_fail.png"))
+            print("buttons:", [x.inner_text() for x in page.get_by_role("button").all()][:25])
+            raise
         page.get_by_text("Match updated").first.wait_for(timeout=10000)
         check("choosing another match updates the item", page.get_by_text("You chose this").count() >= 1)
+
+        # unstated weight: the app must not guess "1 banana" = 1 g; Add stays disabled until the weight is confirmed
+        page.get_by_label("Food search").fill("nothing 1 banana")
+        page.keyboard.press("Enter")
+        page.get_by_text("Ingredients found").first.wait_for(timeout=20000)
+        add = page.get_by_role("button", name="Add to ").first
+        check("add is disabled while the weight is unconfirmed", add.is_disabled())
+        check("warning explains why", page.get_by_text("guessed").count() >= 1)
+        page.get_by_role("button", name="Keep 100 g").click()
+        page.wait_for_timeout(1200)
+        check("keeping 100 g enables add and clears the warning",
+              (not page.get_by_role("button", name="Add to ").first.is_disabled()) and page.get_by_text("guessed").count() == 0)
+        page.get_by_label("Food search").fill("100 g nothing special")
+        page.keyboard.press("Enter")
+        page.wait_for_timeout(1500)
 
         # persistence: reload with the same URL keeps the data
         page.get_by_role("button", name="Add to ").first.click()

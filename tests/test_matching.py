@@ -117,3 +117,37 @@ def test_ranked_candidates_best_first_and_first_equals_best_match(monkeypatch):
     ranked = matching.ranked_candidates("oatmeal", k=2)
     assert [f["fdcId"] for f, _ in ranked][0] == matching.best_match(foods, "oatmeal")[0]["fdcId"] == 2
     assert len(ranked) == 2 and ranked[0][1] >= ranked[1][1]
+
+
+@pytest.mark.parametrize("text,expected", [
+    # regression: the old pattern had no word boundary and ate the first letters of the food name
+    ("1 large egg", (1.0, "g", "large egg")),
+    ("100 grams chicken", (100.0, "g", "chicken")),
+    ("1 lemon", (1.0, "g", "lemon")),
+    ("1 liter milk", (1.0, "l", "milk")),
+    ("2 l water", (2.0, "l", "water")),
+    ("1.5 tablespoons oil", (1.5, "tbsp", "oil")),
+    ("2 teaspoons sugar", (2.0, "tsp", "sugar")),
+    ("1 ounce cheese", (1.0, "oz", "cheese")),
+    ("1 1/2 cups rice", (1.5, "cup", "rice")),
+    ("5 fl oz wine", (5.0, "oz", "wine")),
+])
+def test_parse_serving_does_not_corrupt_names_and_knows_more_units(text, expected):
+    assert parse_serving(text) == expected
+
+
+@pytest.mark.parametrize("text,known,grams", [
+    ("100g salmon", True, 100.0), ("2 cups rice", True, 480.0), ("1 liter milk", True, 1000.0), ("3 oz cheese", True, 85.05),
+    ("1 banana", False, None), ("2 eggs", False, None), ("2 slices bread", False, None), ("3 pieces chicken", False, None),
+    ("banana", False, None), ("1 large egg", False, None),
+])
+def test_parse_amount_only_trusts_stated_weights(text, known, grams):
+    from nutripulse.matching import parse_amount
+    a = parse_amount(text)
+    assert a["known"] is known and (a["grams"] is None if grams is None else a["grams"] == pytest.approx(grams))
+
+
+def test_parse_amount_flags_volume_units_as_approximate_and_hints_unknowns():
+    from nutripulse.matching import parse_amount
+    assert parse_amount("2 cups rice")["approx"] is True and parse_amount("100 g rice")["approx"] is False
+    assert parse_amount("2 slices bread")["hint"] == "2 slices of bread" and parse_amount("1 banana")["hint"] == "1 banana"

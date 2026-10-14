@@ -40,3 +40,16 @@ def test_meal_evaluation_and_mape(monkeypatch):
     cn, us = run_meals.summarize(res, "cn"), run_meals.summarize(res, "usda")
     assert cn["kcal"][0] == pytest.approx(0.0) and us["kcal"][0] == pytest.approx(0.0)
     assert run_meals.worst(res, "cn")[0][0] == pytest.approx(0.0)
+
+
+def test_usda_path_skips_meals_with_unstated_weights(monkeypatch):
+    monkeypatch.setattr(run_meals.apis, "nlp_items", lambda q: [
+        {"name": "banana", "serving_size_g": 118, "calories": 105, "protein_g": 1, "carbohydrates_total_g": 27, "fat_total_g": 0.4}])
+    monkeypatch.setattr(run_meals.matching, "search_food", lambda n: {"description": "Banana", "calories": 89, "protein": 1.1, "carbs": 23, "fat": 0.3})
+    stated = {"meal_text": "100 g banana", "ingredients": "100 g banana", "ref_kcal": "89", "ref_protein_g": "1", "ref_carbs_g": "23", "ref_fat_g": "0.3", "ref_source": "t"}
+    unstated = {"meal_text": "1 banana", "ingredients": "1 banana", "ref_kcal": "105", "ref_protein_g": "1", "ref_carbs_g": "27", "ref_fat_g": "0.4", "ref_source": "t"}
+    res = run_meals.evaluate([stated, unstated])
+    assert res[0]["usda"] is not None and res[1]["usda"] is None and res[1]["cn"] is not None
+    assert run_meals.summarize(res, "usda")["kcal"][3] == 1            # only the stated-weight meal is scored
+    assert run_meals.summarize(res, "cn")["kcal"][3] == 2
+    assert [r[2]["meal"]["meal_text"] for r in run_meals.worst(res, "usda")] == ["100 g banana"]

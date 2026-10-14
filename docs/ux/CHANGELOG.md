@@ -81,9 +81,19 @@ Each entry names the change and the problem it fixes (numbers refer to [`audit.m
   Found by the water-tap measurement; labels are now static and the live values sit in the summary strip.
 - **The USDA fallback path was slow because its three searches ran one after another**; they now run concurrently.
 
+- **"Pick another match" closed itself when you chose an option** after any earlier add (Streamlit remounts the fragment on a full rerun and an
+  expander inside it forgets it was open). Found by the end-to-end test; the control is now a toggle whose state lives in `session_state`.
+- **The USDA fallback logged "1 banana" as 1 g.** Worse, its unit pattern had no word boundary, so it also corrupted food names:
+  `"1 large egg"` searched for "arge egg", `"100 grams chicken"` for "rams chicken", `"1 lemon"` for "emon". Tablespoons, teaspoons,
+  ounces, liters and "1 1/2 cups" were not recognised. The parser now uses word boundaries and the full set of unit spellings
+  (`parse_amount` in `matching.py`). A bare count, a piece or a slice has no known weight, so the app shows 100 g (the basis USDA values are
+  listed for), warns "I can't tell how much ... weighs, so I haven't guessed", and keeps **Add disabled until you type a weight or tap "Keep 100 g"**.
+  The meal benchmark excludes such meals from the USDA path instead of scoring an invented weight.
+
 ## Known limitations (not fixed)
 
-- On the USDA fallback path, unit-less quantities are read as grams (`"1 banana"` is 1 g, `"2 eggs"` is 2 g). The CalorieNinjas path handles them.
+- Cup, tablespoon, teaspoon, ml and litre amounts are converted as if the food weighed the same as water (the UI says so). A cup of flour or
+  cooked rice is not 240 g, so check the grams. Real per-food weights would need USDA portion data (an extra API call per lookup).
 - Water and the History table can lag the Today tab by up to 5 s.
 - Remaining axe findings come from Streamlit's own widgets (disabled number-input stepper buttons, the popover wrapper, the selectbox
   placeholder colour, page landmarks), not from this app's markup.

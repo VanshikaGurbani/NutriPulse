@@ -58,3 +58,14 @@ def test_to_entry_and_amount_format():
     e = lookup.to_entry(item, "Lunch", "rice")
     assert e["kcal"] == pytest.approx(41.6) and e["meal"] == "Lunch"
     assert lookup.format_amount(416.0) == "416" and lookup.format_amount(0.5) == "0.5" and lookup.format_amount(1234.0) == "1,234"
+
+
+def test_unstated_weight_is_flagged_not_guessed(monkeypatch):
+    monkeypatch.setattr(apis, "nlp_items", lambda q: None)
+    monkeypatch.setattr(apis, "usda_fetch", lambda q, dt, page_size=8: [food("Bananas, raw", 89, fdc_id=9)] if dt == "SR Legacy" else [])
+    r = lookup.lookup_meal("1 banana")["items"][0]
+    assert r["amount_known"] is False and r["grams"] == 100.0 and r["amount_hint"] == "1 banana"
+    known = lookup.lookup_meal("150 g banana")["items"][0]
+    assert known["amount_known"] is True and known["grams"] == 150.0
+    cups = lookup.lookup_meal("2 cups banana")["items"][0]
+    assert cups["amount_approx"] is True and cups["grams"] == 480.0

@@ -31,8 +31,10 @@ def usda_estimate(ingredients):
     tot = {"kcal": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
     detail, grams = [], 0.0
     for ing in ingredients:
-        qty, unit, name = matching.parse_serving(ing)
-        g = qty * matching.UNIT_TO_GRAMS.get(unit, 1.0)
+        amt = matching.parse_amount(ing)
+        if not amt["known"]:
+            return None       # the app would ask the person for this weight; we do not invent one
+        g, name = amt["grams"], amt["name"]
         r = matching.search_food(name)
         if r is None:
             detail.append(f"{ing!r}: no match")
@@ -48,11 +50,8 @@ def usda_estimate(ingredients):
 
 
 def listed_grams(ingredients):
-    total = 0.0
-    for i in ingredients:
-        qty, unit, _ = matching.parse_serving(i)
-        total += qty * matching.UNIT_TO_GRAMS.get(unit, 1.0)
-    return total
+    """Total grams of the ingredients whose weight is stated; None-weight ingredients (bare counts) are skipped."""
+    return sum(a["grams"] for a in map(matching.parse_amount, ingredients) if a["known"])
 
 
 def evaluate(meals):
@@ -68,8 +67,9 @@ def evaluate(meals):
 def summarize(results, path):
     rows = {}
     for k, _ in NUTS:
-        ests = [r[path][k] if r[path] else 0.0 for r in results]    # failed lookups count as a 0 estimate
-        refs = [r["ref"][k] for r in results]
+        used = [r for r in results if not (path == "usda" and r["usda"] is None)]   # skipped: amount unknown, the app would ask
+        ests = [r[path][k] if r[path] else 0.0 for r in used]                        # failed lookups count as a 0 estimate
+        refs = [r["ref"][k] for r in used]
         score, n = mape(ests, refs)
         errs = [abs(e - rf) / rf * 100 for e, rf in zip(ests, refs) if rf > 0]
         lo, hi = bootstrap_ci(errs, 1000, 20240601)
@@ -80,6 +80,8 @@ def summarize(results, path):
 def worst(results, path, k=5):
     scored = []
     for r in results:
+        if path == "usda" and r["usda"] is None:
+            continue
         ref = r["ref"]["kcal"]
         est = r[path]["kcal"] if r[path] else 0.0
         scored.append((abs(est - ref) / ref * 100 if ref > 0 else 0, est, r))
@@ -128,7 +130,10 @@ def main():
         for err, est, r in worst(results, path):
             items = "<br>".join(r[path]["detail"]) if r[path] else "-"
             L.append(f"| {r['meal']['meal_text']} | {r['ref']['kcal']:.0f} | {est:.0f} | {err:.0f}% | {explain(r, path)} | {items} |")
-    L += ["", "Reference sources: " + "; ".join(sorted({m["ref_source"] for m in ready})), ""]
+    unknown = sum(r["usda"] is None for r in results)
+    L += ["", f"USDA fallback path: {unknown} of {len(results)} meals were excluded because an ingredient had no stated weight "
+          "(for example \"1 banana\"); the app asks the person for the weight in that case, so there is no estimate to score.",
+          "", "Reference sources: " + "; ".join(sorted({m["ref_source"] for m in ready})), ""]
     update_section("meals", "\n".join(L))
     write_csv(BENCH / "meals_results.csv", csv_rows, ["path", "nutrient", "mape_pct", "ci_low", "ci_high", "n"])
     print(f"meals evaluated: {len(ready)}; live API calls {stats.api_calls}, cache hits {stats.cache_hits}")
