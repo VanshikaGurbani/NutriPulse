@@ -1,86 +1,98 @@
 {
   "version": "after",
-  "date": "2026-10-13 23:16",
+  "date": "2026-10-13 23:35",
   "interaction": {
     "375": [
       {
         "search_in_first_screen": true,
-        "search_box_y_px": 167,
+        "search_box_y_px": 184,
         "autofocused": false,
+        "focus_wait_ms": 3029,
         "scroll_gestures": 2,
-        "search_ms_cold": 1481,
+        "search_ms_cold": 1386,
         "clicks": 2,
         "keystrokes": 30,
         "viewport": "375",
-        "first_load_ms": 3068
+        "first_load_ms": 2592
       },
       {
         "search_in_first_screen": true,
-        "search_box_y_px": 167,
+        "search_box_y_px": 184,
         "autofocused": false,
+        "focus_wait_ms": 3011,
         "scroll_gestures": 2,
-        "search_ms_cold": 866,
+        "search_ms_cold": 255,
         "clicks": 2,
         "keystrokes": 30,
         "viewport": "375",
-        "first_load_ms": 1648
+        "first_load_ms": 1882
       },
       {
         "search_in_first_screen": true,
-        "search_box_y_px": 167,
+        "search_box_y_px": 184,
         "autofocused": false,
+        "focus_wait_ms": 3017,
         "scroll_gestures": 2,
-        "search_ms_cold": 460,
+        "search_ms_cold": 149,
         "clicks": 2,
         "keystrokes": 30,
         "viewport": "375",
-        "first_load_ms": 1853
+        "first_load_ms": 1767
       }
     ],
     "1280": [
       {
         "search_in_first_screen": true,
-        "search_box_y_px": 137,
+        "search_box_y_px": 154,
         "autofocused": true,
+        "focus_wait_ms": 6,
         "scroll_gestures": 1,
-        "search_ms_cold": 1403,
+        "search_ms_cold": 1364,
         "clicks": 1,
         "keystrokes": 30,
         "viewport": "1280",
-        "first_load_ms": 2344
+        "first_load_ms": 2302
       },
       {
         "search_in_first_screen": true,
-        "search_box_y_px": 137,
+        "search_box_y_px": 154,
         "autofocused": true,
+        "focus_wait_ms": 5,
         "scroll_gestures": 1,
-        "search_ms_cold": 267,
+        "search_ms_cold": 172,
         "clicks": 1,
         "keystrokes": 30,
         "viewport": "1280",
-        "first_load_ms": 1977
+        "first_load_ms": 1701
       },
       {
         "search_in_first_screen": true,
-        "search_box_y_px": 137,
+        "search_box_y_px": 154,
         "autofocused": true,
+        "focus_wait_ms": 5,
         "scroll_gestures": 1,
-        "search_ms_cold": 229,
+        "search_ms_cold": 213,
         "clicks": 1,
         "keystrokes": 30,
         "viewport": "1280",
-        "first_load_ms": 1812
+        "first_load_ms": 1684
       }
     ]
   },
   "latency": {
-    "load_cold_ms": 2316,
-    "load_warm_ms": 1228,
-    "repeat_search_ms": 254
+    "load_cold_ms": 2286,
+    "load_warm_ms": 1121,
+    "repeat_search_ms": 214
   },
   "axe": {
     "per_tab": {
       "Today": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "nodes": 1,
+          "help": "Elements must meet minimum color contrast ratio thresholds"
+        },
         {
           "id": "region",
           "impact": "moderate",
@@ -131,12 +143,12 @@
         }
       ]
     },
-    "violation_rules_total": 7,
-    "violating_nodes_total": 48,
+    "violation_rules_total": 8,
+    "violating_nodes_total": 49,
     "rules_by_impact": {
+      "serious": 2,
       "moderate": 4,
-      "critical": 2,
-      "serious": 1
+      "critical": 2
     }
   },
   "lighthouse": {

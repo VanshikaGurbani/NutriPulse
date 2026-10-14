@@ -36,7 +36,8 @@ with st.expander("How matching works"):
         "- Your phrase is first sent to **CalorieNinjas**, which splits it into foods and amounts.\n"
         "- If it has no answer, we search **USDA FoodData Central** and rank the results with a rule-based scorer "
         "(it prefers names that start with your words, cooked over raw for prepared foods, and rejects implausible calories).\n"
-        "- The **match badges** (High / Medium / Low) come from that score. They are hints, not guarantees. "
+        "- The **match badges** (name closely matches / partial / weak) come from that score. They say how well the food's *name* fits your words, "
+        "not whether it is the right food, and the cut-offs are not validated yet. "
         "If a match looks wrong, open **Not right? Pick another match** and choose the right food.")
 st.markdown('<p class="np-muted">Nutrition data: <a href="https://fdc.nal.usda.gov/">USDA FoodData Central</a> and '
             '<a href="https://calorieninjas.com/">CalorieNinjas</a>. Values are estimates for general information only and are '

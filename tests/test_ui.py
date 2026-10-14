@@ -140,3 +140,26 @@ def test_typing_a_weight_also_confirms(env, monkeypatch):
     at.number_input[0].set_value(120.0)
     at.run()
     assert not next(b for b in at.button if b.label.startswith("Add to ")).disabled
+
+
+def test_picking_a_usda_serving_size_sets_and_confirms_the_amount(env, monkeypatch):
+    item = dict(RICE_CARROTS["items"][0], name="Bananas, Raw", query_name="banana", grams=100.0, amount_known=False, amount_hint="2 bananas",
+                amount_qty=2.0, portions=[{"label": "medium", "amount": 1.0, "grams": 118.0}, {"label": "large", "amount": 1.0, "grams": 136.0}],
+                source="USDA", source_detail="🔵 SR Legacy", confidence="high", fdc_id=9, score=12.0)
+    monkeypatch.setattr(lookup, "lookup_meal", lambda q, parallel=True: {"path": "usda", "items": [dict(item)]})
+    at = search(app(), "2 bananas")
+    sel = next(s for s in at.selectbox if s.label.startswith("Or pick one of USDA"))
+    assert list(sel.options) == ["2 × medium (118 g each)", "2 × large (136 g each)"]
+    sel.select("2 × large (136 g each)")
+    at.run()
+    assert not at.exception
+    assert at.number_input[0].value == 272.0
+    assert not next(b for b in at.button if b.label.startswith("Add to ")).disabled
+
+
+def test_service_unavailable_shows_a_service_message_not_no_match(env, monkeypatch):
+    def boom(q, parallel=True):
+        raise apis.ServiceError("unavailable")
+    monkeypatch.setattr(lookup, "lookup_meal", boom)
+    at = search(app(), "rice")
+    assert any("could not be reached" in w.value for w in at.warning) and not any("No match" in w.value for w in at.warning)

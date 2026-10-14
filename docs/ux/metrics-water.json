@@ -1,14 +1,14 @@
 {
   "before_full_rerun": {
-    "median_ms": 271,
-    "max_ms": 288,
-    "min_ms": 248,
+    "median_ms": 199,
+    "max_ms": 214,
+    "min_ms": 193,
     "n": 7
   },
   "after_fragment": {
-    "median_ms": 131,
-    "max_ms": 160,
-    "min_ms": 120,
+    "median_ms": 85,
+    "max_ms": 90,
+    "min_ms": 66,
     "n": 7
   }
 }

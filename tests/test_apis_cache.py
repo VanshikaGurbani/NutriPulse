@@ -170,3 +170,24 @@ def test_http_429_is_a_rate_limit_error(monkeypatch):
     with pytest.raises(apis.ServiceError) as e:
         apis.usda_fetch("rice", None)
     assert e.value.kind == "rate_limit"
+
+
+def test_slim_portions_handles_each_usda_shape():
+    raw = {"foodPortions": [
+        {"amount": 1.0, "gramWeight": 174.0, "modifier": "cup", "measureUnit": {"name": "undetermined"}},              # SR Legacy
+        {"amount": None, "gramWeight": 24, "modifier": "64354", "portionDescription": "1 small slice"},                 # survey food
+        {"amount": 1.0, "gramWeight": 50.3, "modifier": "whole without shell", "measureUnit": {"name": "egg"}},         # Foundation
+        {"amount": 1.0, "gramWeight": 50.0, "modifier": None, "measureUnit": {"name": "RACC"}},                         # no usable label
+        {"amount": None, "gramWeight": 28, "portionDescription": "Quantity not specified"}]}
+    assert apis.slim_portions(raw)["portions"] == [
+        {"label": "cup", "amount": 1.0, "grams": 174.0}, {"label": "1 small slice", "amount": None, "grams": 24.0},
+        {"label": "egg, whole without shell", "amount": 1.0, "grams": 50.3}]
+
+
+def test_usda_portions_are_cached_and_failures_degrade_to_empty(monkeypatch, tmp_path):
+    calls = fake_get(monkeypatch, {"foodPortions": [{"amount": 1.0, "gramWeight": 174.0, "modifier": "cup"}]})
+    apis.configure_cache(DiskCache(tmp_path))
+    assert apis.usda_portions(1) == apis.usda_portions(1) == [{"label": "cup", "amount": 1.0, "grams": 174.0}]
+    assert len(calls) == 1
+    fake_get(monkeypatch, {}, status=500)
+    assert apis.usda_portions(2) == [] and apis.usda_portions(None) == []

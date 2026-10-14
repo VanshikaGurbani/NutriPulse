@@ -94,8 +94,14 @@ def after_flow(page):
     search_in_first_screen = in_view(page, box)
     search_y = box.bounding_box()["y"]
     gestures = scroll_into_view(page, box)
-    page.wait_for_timeout(800)                          # give the autofocus script its chance, as a person would
-    focused = page.evaluate("document.activeElement && document.activeElement.getAttribute('aria-label') === 'Food search'")
+    focus_js = "document.activeElement && document.activeElement.getAttribute('aria-label') === 'Food search'"
+    t_focus = time.perf_counter()
+    try:                                                # a person glances at the page for up to ~3 s before reaching for the box
+        page.wait_for_function(focus_js, timeout=3000)
+    except Exception:
+        pass
+    focused = page.evaluate(focus_js)
+    focus_wait_ms = round((time.perf_counter() - t_focus) * 1000)
     if not focused:
         box.click()
     page.keyboard.type(QUERY)
@@ -107,7 +113,7 @@ def after_flow(page):
     gestures += scroll_into_view(page, add)
     add.click()
     page.get_by_text("Nothing logged yet").first.wait_for(state="detached", timeout=10000)
-    return {"search_in_first_screen": search_in_first_screen, "search_box_y_px": round(search_y), "autofocused": bool(focused),
+    return {"search_in_first_screen": search_in_first_screen, "search_box_y_px": round(search_y), "autofocused": bool(focused), "focus_wait_ms": focus_wait_ms,
             "scroll_gestures": gestures, "search_ms_cold": round(search_ms)}
 
 

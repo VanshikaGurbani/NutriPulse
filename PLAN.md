@@ -28,7 +28,7 @@ Branch: `benchmark-and-ux`. Small commits, app must run after every commit. Noth
 | Phase | Work | Status |
 |-------|------|--------|
 | D | Playwright installed, 32 before-screenshots, `docs/ux/audit.md`, baseline metrics (clicks, Lighthouse, axe, latency) | **done** |
-| 1-8 | Layout, search form, results table, fix-the-match, SQLite persistence, onboarding, fragments, accessibility | **done** (101 tests incl. headless UI; 13-check real-browser smoke test passes) |
+| 1-8 | Layout, search form, results table, fix-the-match, SQLite persistence, onboarding, fragments, accessibility | **done** (101 tests incl. headless UI; 15-check real-browser smoke test passes) |
 | M | Click/keystroke counts, Lighthouse + axe, latency, water-tap latency; `usability-test.md` template left empty | **done** (`docs/ux/metrics-comparison.md`); usability sessions need real participants |
 | Docs | `docs/ux/CHANGELOG.md`, `docs/ux/CLAIMS.md`, README UX section + GIF | **done** |
 

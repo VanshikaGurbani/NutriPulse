@@ -89,6 +89,18 @@ def main():
         page.wait_for_timeout(1200)
         check("keeping 100 g enables add and clears the warning",
               (not page.get_by_role("button", name="Add to ").first.is_disabled()) and page.get_by_text("guessed").count() == 0)
+        # picking one of USDA's serving sizes resolves an unstated weight
+        page.get_by_label("Food search").fill("2 bananas nothing")
+        page.keyboard.press("Enter")
+        page.get_by_text("Ingredients found").first.wait_for(timeout=20000)
+        page.get_by_role("combobox", name="Or pick one of USDA's serving sizes for this food").click()
+        page.get_by_role("option", name="2 × large (136 g each)").click()
+        page.wait_for_timeout(1500)
+        check("choosing a USDA serving size enables add",
+              not page.get_by_role("button", name="Add to ").first.is_disabled() and page.get_by_text("guessed").count() == 0)
+        amount = page.get_by_label("Amount of").first.input_value()
+        check("serving size sets the amount (2 x 136 g)", amount.startswith("272"), amount)
+
         page.get_by_label("Food search").fill("100 g nothing special")
         page.keyboard.press("Enter")
         page.wait_for_timeout(1500)

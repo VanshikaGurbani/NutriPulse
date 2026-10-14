@@ -136,16 +136,52 @@ def slim_usda(payload: dict) -> dict:
     return {"foods": foods}
 
 
-def usda_fetch(query: str, data_type, page_size: int = 8) -> list:
-    """USDA /foods/search. HTTP errors yield [] (as the app always did);
-    network errors propagate to the caller."""
+def usda_fetch_checked(query: str, data_type, page_size: int = 8) -> tuple:
+    """USDA /foods/search. Returns (foods, failed). An HTTP error that survives the retries gives ([], True) so callers can
+    tell "no results" from "the service refused us". Network failures raise ServiceError."""
     params = {"query": query, "api_key": usda_key(), "pageSize": page_size}
     if data_type:
         params["dataType"] = data_type
     try:
-        return _get_json("usda", f"{USDA_BASE}/foods/search", params, retry_400=USDA_400_RETRIES,
-                         transform=slim_usda).get("foods", [])
+        payload = _get_json("usda", f"{USDA_BASE}/foods/search", params, retry_400=USDA_400_RETRIES, transform=slim_usda)
+        return payload.get("foods", []), False
     except requests.HTTPError:
+        return [], True
+
+
+def usda_fetch(query: str, data_type, page_size: int = 8) -> list:
+    """Foods only (an HTTP error yields []); network errors propagate as ServiceError."""
+    return usda_fetch_checked(query, data_type, page_size)[0]
+
+
+def slim_portions(payload: dict) -> dict:
+    """Keep USDA household-portion data in one flat shape. The label lives in `portionDescription` (survey foods) or in
+    `modifier`/`measureUnit` (SR Legacy, Foundation); `amount` is sometimes missing. Responses can be hundreds of KB, so
+    only this survives into the cache."""
+    out = []
+    for p in payload.get("foodPortions", []) or []:
+        grams = p.get("gramWeight")
+        unit = (p.get("measureUnit") or {}).get("name") or ""
+        label = (p.get("portionDescription") or "").strip()
+        if not label:
+            mod = str(p.get("modifier") or "").strip()
+            label = mod if mod and not mod.isdigit() else ""
+            if unit and unit.lower() not in ("undetermined", "racc", "g", "gram"):
+                label = f"{unit}, {label}" if label else unit
+        if not grams or not label or label.lower().startswith("quantity not specified"):
+            continue
+        out.append({"label": label, "amount": p.get("amount"), "grams": float(grams)})
+    return {"portions": out}
+
+
+def usda_portions(fdc_id) -> list:
+    """Household portions for one food ([] when none, or when the lookup fails: portions are an enhancement, not a requirement)."""
+    if not fdc_id:
+        return []
+    try:
+        return _get_json("usda_food", f"{USDA_BASE}/food/{fdc_id}", {"api_key": usda_key(), "format": "full", "id": fdc_id},
+                         retry_400=USDA_400_RETRIES, transform=slim_portions).get("portions", [])
+    except (requests.HTTPError, ServiceError):
         return []
 
 

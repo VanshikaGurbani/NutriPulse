@@ -103,7 +103,7 @@ def badge(text: str, kind: str = "neutral") -> str:
 
 
 CONFIDENCE_BADGE = {
-    "high": ("● High match", "good"), "medium": ("◐ Medium match", "warn"), "low": ("○ Low match, check it", "bad"),
+    "high": ("● Name closely matches", "good"), "medium": ("◐ Partial name match", "warn"), "low": ("○ Weak name match, check it", "bad"),
     "nlp": ("NLP-parsed", "neutral"), "chosen": ("✓ You chose this", "good"), "sample": ("Sample data", "neutral"),
 }
 

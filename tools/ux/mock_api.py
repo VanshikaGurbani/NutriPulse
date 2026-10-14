@@ -50,6 +50,9 @@ class H(BaseHTTPRequestHandler):
         q = parse_qs(u.query).get("query", [""])[0].lower()
         if u.path.endswith("/foods/search"):
             return self._send({"foods": usda_foods(q or "food")})
+        if "/food/" in u.path:
+            gw = lambda g, m: {"amount": 1.0, "gramWeight": g, "modifier": m, "measureUnit": {"name": "undetermined"}}  # noqa: E731
+            return self._send({"foodPortions": [gw(118.0, "medium"), gw(136.0, "large"), gw(174.0, "cup")]})
         if u.path.endswith("/nutrition"):
             items = [v for k, v in CN_ITEMS.items() if k in q]
             if "nothing" in q or not items:

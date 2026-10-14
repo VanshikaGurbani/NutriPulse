@@ -23,7 +23,7 @@ was checked against the code in `nutrition_tracker.py` (function/section named) 
 | # | Problem | Evidence |
 |---|---------|----------|
 | 10 | Macro cards in the result are cut off at 375 px: the 5-column grid overflows and Fiber is clipped | `today-result-full-375.png` |
-| 11 | Unit-less quantities silently become grams on the USDA fallback path: `parse_serving("1 banana")` gave 1 g and `"2 eggs"` gave 2 g. **A worse defect was found while fixing it:** the unit pattern had no word boundary, so `"1 large egg"` was searched as "arge egg" and `"100 grams chicken"` as "rams chicken". Fixed; see CHANGELOG. | `nutripulse/matching.py`, `tests/test_matching.py` |
+| 11 | Unit-less quantities silently become grams on the USDA fallback path: `parse_serving("1 banana")` gave 1 g and `"2 eggs"` gave 2 g. **A worse defect was found while fixing it:** the unit pattern had no word boundary, so `"1 large egg"` was searched as "arge egg" and `"100 grams chicken"` as "rams chicken". Fixed (stated weights are used, unstated ones are asked for, USDA serving sizes are offered); see CHANGELOG. | `nutripulse/matching.py`, `tests/test_matching.py` |
 | 12 | Water row: 5 columns collapse into 5 full-width stacked buttons on mobile, about 300 px of vertical space for one tracker | `today-result-full-375.png` |
 | 13 | No per-item delete or edit in the food log; only "Clear Log", with no confirmation and no undo | `Today's Food Log` section |
 | 14 | Pressing Enter in the search box does nothing (not a form); the user must find and click "Analyze Food" | `food_input` / `analyze_clicked` |

@@ -72,8 +72,8 @@ def _focus_search_on_desktop():
           var tries = 0, t = setInterval(function () {
             var el = p.document.querySelector('input[aria-label="Food search"]');
             if (el && !p.document.activeElement.matches('input,textarea,select')) { el.focus(); clearInterval(t); }
-            if (++tries > 25) clearInterval(t);
-          }, 200);
+            if (++tries > 120) clearInterval(t);
+          }, 50);
         })();
         </script>""", height=1)
 
@@ -171,6 +171,28 @@ def _on_thumb(rid: str):
             pass
 
 
+def _use_portion(res_id: str, uid: str, portions: list, qty: float):
+    """Callback for the serving-size picker: set the amount from USDA's data and mark it confirmed. Runs before the widgets
+    are drawn, so it may set the amount field's own state."""
+    res = _ss().get("np_result")
+    pick = _ss().get(f"np_port_{res_id}_{uid}")
+    if not res or res["id"] != res_id or pick is None:
+        return
+    chosen = next((p for p in portions if _portion_text(p, qty) == pick), None)
+    if chosen is None:
+        return
+    grams = round(qty * chosen["grams"] / (chosen.get("amount") or 1.0), 1)
+    for it in res["items"]:
+        if it["uid"] == uid:
+            it["grams"], it["confirmed"] = grams, True
+    _ss()[f"np_amt_{res_id}_{uid}"] = float(grams)
+
+
+def _portion_text(p: dict, qty: float) -> str:
+    each = p["grams"] / (p.get("amount") or 1.0)
+    return f"{qty:g} × {p['label']} ({lookup.format_amount(each)} g each)" if qty != 1 else f"{p['label']} ({lookup.format_amount(each)} g)"
+
+
 def _apply_alt(res: dict, it: dict, alt: dict, rank: int):
     try:
         feedback.log_feedback(res["query"], "calorieninjas" if it["source"] == "CalorieNinjas" else "usda", it.get("fdc_id"), it.get("score"), -1)
@@ -194,9 +216,17 @@ def _render_item_controls(res: dict, it: dict, many: bool):
         if abs(new_g - it["grams"]) > 1e-9:
             it["confirmed"] = True                  # the person typed a weight
         it["grams"] = new_g
-        if not it.get("confirmed", True) and st.button("Keep 100 g", key=f"np_keep_{res['id']}_{uid}", help="Use 100 g, the amount USDA values are listed for"):
-            it["confirmed"] = True
-            st.rerun(scope="fragment")
+        if not it.get("confirmed", True):
+            if it.get("portions"):
+                qty = it.get("amount_qty") or 1.0
+                st.selectbox("Or pick one of USDA's serving sizes for this food", [_portion_text(p, qty) for p in it["portions"]], index=None,
+                             placeholder="Choose a serving size", key=f"np_port_{res['id']}_{uid}", on_change=_use_portion,
+                             args=(res["id"], uid, it["portions"], qty))
+            if st.button("Keep 100 g", key=f"np_keep_{res['id']}_{uid}", help="Use 100 g, the amount USDA values are listed for"):
+                it["confirmed"] = True
+                st.rerun(scope="fragment")
+        if it.get("amount_note"):
+            muted(it["amount_note"])
         if many and c2.button("Remove", key=f"np_rm_{res['id']}_{uid}", use_container_width=True, help=f"Remove {it['name']} from this meal"):
             res["items"] = [x for x in res["items"] if x["uid"] != uid]
             st.rerun(scope="fragment")
@@ -412,6 +442,7 @@ def render_exercise(store):
 
 @st.fragment
 def render(store):
+    _focus_search_on_desktop()
     pending = _ss().pop("np_pending", None)
     render_search(store)
     pending = _ss().pop("np_pending", None) or pending
@@ -429,7 +460,6 @@ def render(store):
         render_macros(store)
         render_water(store)
         render_exercise(store)
-    _focus_search_on_desktop()
 
 
 __all__ = ["render", "cached_alternatives", "counted", "suggest_macros"]

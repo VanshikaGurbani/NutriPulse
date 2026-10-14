@@ -37,6 +37,7 @@ Before/after screenshots of every tab at 375 px and 1280 px are in [`docs/ux/bef
 |---|---|
 | **Search first** | The search box is the first thing on Today. Press Enter to search; on desktop it is focused on load. |
 | **Ingredient breakdown** | A multi-food phrase becomes a table: ingredient, amount, kcal, source badge and match badge. Edit amounts, remove items. |
+| **Amounts you can trust** | Weights you type are used as stated; cups and spoons use the food's own USDA serving size. If you give no weight ("1 banana"), the app asks, offers USDA's serving sizes, and won't log until you confirm. |
 | **Fix the match** | "Not right? Pick another match" lists the five best USDA candidates; low-confidence matches open it for you. Your choice is saved. |
 | **One-tap foods** | Recent foods and ★ favorites appear as chips. The meal defaults to the time of day. |
 | **Persistent** | Log, goals, water, exercise and history are saved automatically under a private link (see limitations); refresh keeps them. Undo after add or remove. |
@@ -87,6 +88,7 @@ Full list of changes and the problem each one fixes: [`docs/ux/CHANGELOG.md`](do
  USDA FoodData Central ──► 3 data-type searches in parallel (Foundation, FNDDS, SR Legacy)
  (fallback)                 retried on USDA's intermittent HTTP 400s
                             ranked by a rule-based scorer; top 5 kept for "Pick another match"
+                            multi-food phrases one match cannot explain are split into ingredients
 ```
 
 The USDA scorer combines weighted terms: name starts with the query, query words in the first tokens, word hits, cooked-over-raw for prepared foods, a penalty when the first word is not in the query, a wrong-category penalty ("Bread, oatmeal" for "oatmeal"), a penalty for implausible calories, and a brevity term. Its terms and weights live in [`nutripulse/matching.py`](nutripulse/matching.py).

@@ -17,7 +17,7 @@ RAW_FOODS = {
 
 UNIT_TO_GRAMS = {
     "g": 1.0, "kg": 1000.0, "oz": 28.35, "lb": 453.6,
-    "cup": 240.0, "tbsp": 15.0, "tsp": 5.0, "ml": 1.0, "l": 1000.0,
+    "cup": 240.0, "tbsp": 15.0, "tsp": 5.0, "ml": 1.0, "l": 1000.0, "floz": 29.57,
     "piece": 100.0, "slice": 30.0,
 }
 UNITS = list(UNIT_TO_GRAMS.keys())
@@ -47,7 +47,7 @@ _UNIT_ALIASES = {
 # Units whose weight depends on the food: the app cannot know them, so it must ask instead of guessing.
 FOOD_DEPENDENT_UNITS = {"piece", "slice"}
 # Volume units are converted as if the food weighed the same as water (an approximation worth saying out loud).
-VOLUME_UNITS = {"cup", "tbsp", "tsp", "ml", "l"}
+VOLUME_UNITS = {"cup", "tbsp", "tsp", "ml", "l", "floz"}
 
 _UNIT_RE = r"fl\.?\s*oz|" + "|".join(sorted((re.escape(k) for k in _UNIT_ALIASES), key=len, reverse=True))
 _SERVING_RE = re.compile(
@@ -71,7 +71,7 @@ def _canonical_unit(unit_str):
         return None
     u = re.sub(r"\s+", " ", unit_str.lower().strip())
     if re.match(r"fl\.?\s*oz", u):
-        return "oz"
+        return "floz"
     return _UNIT_ALIASES.get(u)
 
 
@@ -102,6 +102,60 @@ def parse_amount(text: str) -> dict:
         return {"name": name, "qty": qty, "unit": unit, "grams": None, "known": False, "approx": False, "hint": label}
     return {"name": name, "qty": qty, "unit": unit, "grams": qty * UNIT_TO_GRAMS[unit], "known": True,
             "approx": unit in VOLUME_UNITS, "hint": text}
+
+
+CONNECTOR_WORDS = {"and", "with", "of", "plus", "the", "a", "an", "in", "on"}
+_SPLIT_RE = re.compile(r"\s*(?:,|\+|&|;|\band\b|\bwith\b|\bplus\b)\s*", flags=re.IGNORECASE)
+MAX_PARTS = 6
+
+
+def split_phrase(text: str) -> list:
+    """'2 cups rice and carrots, 1 egg' -> ['2 cups rice', 'carrots', '1 egg'] (at most MAX_PARTS)."""
+    return [p.strip() for p in _SPLIT_RE.split(text) if p and p.strip()][:MAX_PARTS]
+
+
+def covers_query(description: str, name: str) -> bool:
+    """True when every content word of the query appears in a food description, so the match explains the whole phrase."""
+    desc = description.lower()
+    words = [w for w in query_words(name) if w not in CONNECTOR_WORDS]
+    return bool(words) and all(re.search(rf"\b{re.escape(w)}\b", desc) for w in words)
+
+
+PORTION_WORDS = {"cup": ("cup", "cups"), "tbsp": ("tbsp", "tablespoon", "tablespoons"), "tsp": ("tsp", "teaspoon", "teaspoons")}
+
+
+def _portion_unit_count(p: dict) -> float:
+    """How many of its unit a USDA portion covers: its `amount`, else a leading number in the label ('2 cups'), else 1."""
+    if p.get("amount"):
+        return float(p["amount"])
+    m = re.match(r"^(\d+(?:\.\d+)?(?:/\d+)?)\s", p["label"].strip())
+    if m:
+        n = m.group(1)
+        return float(n.split("/")[0]) / float(n.split("/")[1]) if "/" in n else float(n)
+    return 1.0
+
+
+def grams_from_portions(portions: list, unit: str, qty: float):
+    """Grams for `qty` of a volume unit using THIS food's USDA portion data, or None when it has no matching portion.
+    Prefers a plain portion ('cup', '1 cup') over a qualified one ('cup, sliced')."""
+    words = PORTION_WORDS.get(unit)
+    if not words:
+        return None
+    best = None
+    for p in portions:
+        text = re.sub(r"^\d+(?:\.\d+)?(?:/\d+)?\s*", "", p["label"].lower().strip())
+        if text in words:
+            tier = 0
+        elif any(text.startswith(w + ",") or text.startswith(w + " ") for w in words):
+            tier = 1
+        else:
+            continue
+        if best is None or tier < best[0]:
+            best = (tier, p)
+    if best is None:
+        return None
+    p = best[1]
+    return qty * p["grams"] / _portion_unit_count(p), p["label"]
 
 
 def clean_food_name(name: str) -> str:
@@ -176,14 +230,21 @@ def best_match(foods: list, query: str) -> tuple:
 
 def candidate_lists(query: str, parallel: bool = False) -> list:
     """USDA results per data-type call, in API order. Falls back to one untyped call.
-    parallel=True issues the typed searches concurrently (the app path); the result is identical."""
+    parallel=True issues the typed searches concurrently (the app path); the result is identical.
+    If nothing came back and at least one call was refused (after retries), raises ServiceError instead of reporting
+    "no results": the food may well exist, the service just did not answer."""
     if parallel:
         with ThreadPoolExecutor(max_workers=len(USDA_DATA_TYPES)) as pool:
-            lists = list(pool.map(lambda dt: apis.usda_fetch(query, dt), USDA_DATA_TYPES))
+            checked = list(pool.map(lambda dt: apis.usda_fetch_checked(query, dt), USDA_DATA_TYPES))
     else:
-        lists = [apis.usda_fetch(query, dt) for dt in USDA_DATA_TYPES]
+        checked = [apis.usda_fetch_checked(query, dt) for dt in USDA_DATA_TYPES]
+    lists, failed = [c[0] for c in checked], any(c[1] for c in checked)
     if not any(lists):
-        lists = [apis.usda_fetch(query, None)]
+        foods, failed_untyped = apis.usda_fetch_checked(query, None)
+        lists = [foods]
+        failed = failed or failed_untyped
+        if not foods and failed:
+            raise apis.ServiceError("unavailable")
     return lists
 
 

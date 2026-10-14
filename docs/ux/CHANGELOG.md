@@ -90,10 +90,28 @@ Each entry names the change and the problem it fixes (numbers refer to [`audit.m
   listed for), warns "I can't tell how much ... weighs, so I haven't guessed", and keeps **Add disabled until you type a weight or tap "Keep 100 g"**.
   The meal benchmark excludes such meals from the USDA path instead of scoring an invented weight.
 
+- **A USDA outage looked like "No match".** If every USDA search was refused after retries, the app told you your food had no match.
+  It now says the nutrition database could not be reached (a real transient outage during testing showed this working), while a
+  genuinely empty search still says "No match".
+- **`fl oz` was treated as a weight ounce** (28.35 g); it is now a volume (29.57 g, flagged approximate).
+- **The USDA fallback never split a multi-food phrase.** "white rice and carrots" was searched as one food. If the whole-phrase match
+  does not explain every content word, each part is now looked up on its own ("macaroni and cheese" stays whole because USDA has that dish).
+- **Cup, spoon and unstated amounts ignored the food's real serving sizes.** Cups, tablespoons and teaspoons now use the matched food's own
+  USDA portion (a cup of cooked white rice is 174 g, not water's 240 g), falling back to the flagged water approximation when USDA has none.
+  For "1 banana" or "2 eggs" the app offers that food's USDA serving sizes to choose from, besides typing a weight. Portion data is fetched
+  only when needed and cached; responses of up to 845 KB are slimmed to the few fields used.
+- **The "High / Medium / Low match" badge overstated what it knows.** It measures how well the food's *name* fits your words, not whether
+  it is the right food, and a breaded chicken product showed as "High" for "chicken breast". The badges now say "Name closely matches /
+  Partial name match / Weak name match, check it", and the cut-offs are documented as unvalidated.
+- **Autofocus arrived up to 1.4 s late and cost layout space.** The helper is mounted earlier and polls every 50 ms: 5 of 10 loads focus
+  within 100 ms and the slowest took 944 ms (`metrics-focus.json`). The hidden helper adds about 17 px above the search box (desktop y 137 -> 154).
+
 ## Known limitations (not fixed)
 
-- Cup, tablespoon, teaspoon, ml and litre amounts are converted as if the food weighed the same as water (the UI says so). A cup of flour or
-  cooked rice is not 240 g, so check the grams. Real per-food weights would need USDA portion data (an extra API call per lookup).
+- The match badge thresholds and the scorer itself are not yet validated; the accuracy benchmark exists to do that and still needs labels.
+  On real data the scorer picked "egg yolk" for "2 large eggs" and a breaded product for "chicken breast".
+- Foods USDA has no serving sizes for still fall back to the water-density approximation for cups and spoons (flagged in the UI).
+- ml and litre amounts are converted at 1 g per ml (right for water-like liquids, approximate for others).
 - Water and the History table can lag the Today tab by up to 5 s.
 - Remaining axe findings come from Streamlit's own widgets (disabled number-input stepper buttons, the popover wrapper, the selectbox
   placeholder colour, page landmarks), not from this app's markup.

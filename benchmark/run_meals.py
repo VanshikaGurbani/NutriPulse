@@ -13,6 +13,7 @@ import argparse
 
 from benchmark.common import BENCH, apis, matching, read_csv, setup_cache, stats, update_section, write_csv
 from benchmark.metrics import bootstrap_ci, mape
+from nutripulse import lookup
 
 NUTS = [("kcal", "ref_kcal"), ("protein", "ref_protein_g"), ("carbs", "ref_carbs_g"), ("fat", "ref_fat_g")]
 
@@ -34,11 +35,12 @@ def usda_estimate(ingredients):
         amt = matching.parse_amount(ing)
         if not amt["known"]:
             return None       # the app would ask the person for this weight; we do not invent one
-        g, name = amt["grams"], amt["name"]
+        name = amt["name"]
         r = matching.search_food(name)
         if r is None:
             detail.append(f"{ing!r}: no match")
             continue
+        g = lookup.resolve_amount(amt, r.get("fdc_id"))["grams"]       # same rule as the app: the food's own USDA serving size for cups/spoons
         f = g / 100
         tot["kcal"] += r["calories"] * f
         tot["protein"] += r["protein"] * f

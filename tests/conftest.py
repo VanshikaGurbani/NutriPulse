@@ -29,3 +29,11 @@ def isolated_state(monkeypatch):
     monkeypatch.setattr(apis._http, "get", no_network)
     yield
     apis.configure_cache(None)
+
+
+def fake_usda(monkeypatch, fn, portions=None):
+    """Replace USDA searches (and optionally portion lookups) with fixtures. fn(query, data_type, page_size) -> list of foods."""
+    from nutripulse import apis
+    monkeypatch.setattr(apis, "usda_fetch_checked", lambda q, dt, page_size=8: (fn(q, dt, page_size), False))
+    monkeypatch.setattr(apis, "usda_fetch", lambda q, dt, page_size=8: fn(q, dt, page_size))
+    monkeypatch.setattr(apis, "usda_portions", lambda fdc_id: (portions or {}).get(fdc_id, []))

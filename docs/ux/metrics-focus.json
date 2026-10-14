@@ -1,0 +1,18 @@
+{
+  "loads": 10,
+  "focused": 10,
+  "lag_ms_after_box_visible_sorted": [
+    11,
+    13,
+    14,
+    16,
+    38,
+    718,
+    727,
+    740,
+    766,
+    944
+  ],
+  "within_100ms": 5,
+  "max_ms": 944
+}

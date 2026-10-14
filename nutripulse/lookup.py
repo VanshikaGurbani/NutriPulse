@@ -8,7 +8,7 @@ from . import apis, matching
 NUTRIENTS = ("kcal", "protein", "carbs", "fat", "fiber", "sugar", "sodium")
 
 # Matcher score thresholds for the confidence badge. `low` mirrors the app's existing LOW_CONFIDENCE_THRESHOLD;
-# `high` is a display choice (not tuned or validated), so the badge is a hint, not a calibrated probability.
+# `high` is a display choice (not tuned or validated). The score measures NAME similarity, not correctness, so badges are worded that way.
 HIGH_SCORE = 10.0
 
 
@@ -48,18 +48,53 @@ def lookup_meal(query: str, parallel: bool = True) -> dict | None:
                         "score": None, "per100": _per100_from_cn(i), "amount_known": True})
         if out:
             return {"path": "calorieninjas", "items": out}
-    amt = matching.parse_amount(query)
-    name = amt["name"]
-    ranked = matching.ranked_candidates(name, 5, parallel)
+    whole = _usda_item(query, parallel)
+    parts = matching.split_phrase(query)
+    name = matching.parse_amount(query)["name"]
+    # "white rice and carrots" matched as one food explains only part of the phrase: look each part up on its own.
+    # A dish that the phrase fully explains ("macaroni and cheese") is kept whole.
+    if len(parts) > 1 and (whole is None or not matching.covers_query(whole["name"], name)):
+        items = [it for it in (_usda_item(part, parallel) for part in parts) if it]
+        if items:
+            return {"path": "usda", "items": items}
+    return {"path": "usda", "items": [whole]} if whole else None
+
+
+def resolve_amount(amt: dict, fdc_id) -> dict:
+    """Grams for a parsed amount, using this food's own USDA serving sizes where they exist.
+
+    - mass units are exact;
+    - cup/tbsp/tsp use the food's portion data (a cup of cooked white rice is 174 g, not water's 240 g) and fall back to the
+      water-density approximation, flagged;
+    - a bare count, piece, slice or no amount has no known weight: show 100 g as a flagged placeholder and offer the
+      food's real serving sizes to choose from.
+    """
+    out = {"grams": None, "known": amt["known"], "approx": amt["approx"], "note": None, "portions": [], "qty": amt.get("qty") or 1.0}
+    if amt["known"]:
+        out["grams"] = amt["grams"]
+        if amt["unit"] in matching.PORTION_WORDS and fdc_id:
+            hit = matching.grams_from_portions(apis.usda_portions(fdc_id), amt["unit"], amt["qty"])
+            if hit:
+                out.update(grams=round(hit[0], 1), approx=False, note=f"Using USDA's serving size for this food: “{hit[1]}”.")
+        return out
+    out["grams"] = 100.0
+    out["portions"] = apis.usda_portions(fdc_id)[:12] if fdc_id else []
+    return out
+
+
+def _usda_item(text: str, parallel: bool):
+    amt = matching.parse_amount(text)
+    ranked = matching.ranked_candidates(amt["name"], 5, parallel)
     if not ranked:
         return None
     food, score = ranked[0]
-    # When the weight was not stated (a bare count, a slice, no amount) we show 100 g, the basis USDA values are listed for,
-    # flag it, and make the person confirm or change it. We never invent a weight for "1 banana".
-    item = usda_item(matching.to_result(food, score, name), name, amt["grams"] if amt["known"] else 100.0)
-    item.update(amount_known=amt["known"], amount_hint=amt["hint"], amount_approx=amt["approx"])
-    item["alternatives"] = [_alt_record(f, sc, name) for f, sc in ranked]     # free: same candidate list, no extra API call
-    return {"path": "usda", "items": [item]}
+    result = matching.to_result(food, score, amt["name"])
+    res = resolve_amount(amt, result["fdc_id"])
+    item = usda_item(result, amt["name"], res["grams"])
+    item.update(amount_known=res["known"], amount_hint=amt["hint"], amount_approx=res["approx"], amount_note=res["note"],
+                portions=res["portions"], amount_qty=res["qty"])
+    item["alternatives"] = [_alt_record(f, sc, amt["name"]) for f, sc in ranked]     # free: same candidate list, no extra API call
+    return item
 
 
 def _alt_record(food: dict, score: float, name: str) -> dict:
