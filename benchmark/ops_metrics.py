@@ -78,25 +78,34 @@ def summarize(recs):
     return "\n".join(L)
 
 
-def usda_path_latency(queries, n, seed=SEED):
-    """Force the USDA path (what runs on fallback) on n distinct queries from a cold cache and time each search."""
-    shutil.rmtree(OPS_CACHE_USDA, ignore_errors=True)
-    apis.configure_cache(DiskCache(OPS_CACHE_USDA))
+def _timed_usda_pass(sample, parallel, cache_dir):
+    shutil.rmtree(cache_dir, ignore_errors=True)
+    apis.configure_cache(DiskCache(cache_dir))
     stats.reset()
-    sample = random.Random(seed + 1).sample(sorted(set(queries)), n)
     ms = []
     for q in sample:
         t0 = time.perf_counter()
-        matching.search_food(matching.parse_serving(q)[2])
+        matching.search_food(matching.parse_serving(q)[2], parallel=parallel)
         ms.append((time.perf_counter() - t0) * 1000)
+    return ms, {"calls": stats.api_calls, "retries": stats.retries, "errors": stats.errors}
+
+
+def usda_path_latency(queries, n, seed=SEED):
+    """Force the USDA path (what runs on fallback) on the same n distinct queries twice from cold caches: the three typed
+    searches one after another, then concurrently (what the app does)."""
+    sample = random.Random(seed + 1).sample(sorted(set(queries)), n)
+    seq, seq_s = _timed_usda_pass(sample, False, OPS_CACHE_USDA)
+    par, par_s = _timed_usda_pass(sample, True, BENCH / "cache_ops_usda_parallel")
     return ["", "### USDA path latency (forced, cold cache)", "",
-            f"The USDA fallback never triggered in the session above, so its latency was measured separately: {n} distinct queries run "
-            "through `search_food` (3 typed USDA searches each, plus retries of USDA's intermittent 400s) from an empty cache.", "",
-            "| Metric | Value | n |", "|---|---|---|",
-            f"| Live latency, USDA path (3 searches): p50 / p95 | {percentile(ms, 50):.0f} ms / {percentile(ms, 95):.0f} ms | {n} |",
-            f"| Live HTTP requests per lookup (mean, incl. retries) | {stats.api_calls / n:.2f} | {n} |",
-            f"| Requests that hit a 400 and were retried | {stats.retries} | {stats.api_calls} requests |",
-            f"| Searches that still failed after retries | {stats.errors} | {n * 3} searches |", ""]
+            f"The USDA fallback never triggered in the session above, so its latency was measured separately on {n} distinct queries "
+            "(3 typed USDA searches each, plus retries of USDA's intermittent 400s), twice from an empty cache: searches one after another, "
+            "then concurrently (what the app does). The two passes hit USDA at different moments, so treat small differences as noise.", "",
+            "| Metric | Sequential | Concurrent | n |", "|---|---|---|---|",
+            f"| Live latency, USDA path: p50 | {percentile(seq, 50):.0f} ms | {percentile(par, 50):.0f} ms | {n} |",
+            f"| Live latency, USDA path: p95 | {percentile(seq, 95):.0f} ms | {percentile(par, 95):.0f} ms | {n} |",
+            f"| Live HTTP requests per lookup (mean, incl. retries) | {seq_s['calls'] / n:.2f} | {par_s['calls'] / n:.2f} | {n} |",
+            f"| Requests that hit a 400 and were retried | {seq_s['retries']} | {par_s['retries']} | |",
+            f"| Searches that still failed after retries | {seq_s['errors']} | {par_s['errors']} | {n * 3} searches each |", ""]
 
 
 def main():

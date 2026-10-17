@@ -1,9 +1,13 @@
 """Headless UI tests with Streamlit's AppTest. Lookups are faked; no network."""
+import pathlib
+
 import pytest
 from streamlit.testing.v1 import AppTest
 
 from nutripulse import apis, lookup
 from nutripulse.store import Store
+
+APP = pathlib.Path(__file__).resolve().parent.parent / "nutrition_tracker.py"
 
 RICE_CARROTS = {"path": "calorieninjas", "items": [
     {"name": "White Rice", "query_name": "white rice", "grams": 200.0, "source": "CalorieNinjas", "source_detail": "NLP-parsed",
@@ -35,7 +39,7 @@ def env(tmp_path, monkeypatch):
 
 
 def app(uid="user-ui-test"):
-    at = AppTest.from_file("nutrition_tracker.py", default_timeout=60)
+    at = AppTest.from_file(str(APP), default_timeout=60)
     at.query_params["u"] = uid
     return at
 
