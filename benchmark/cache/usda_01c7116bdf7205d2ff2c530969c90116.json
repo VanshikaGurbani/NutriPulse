@@ -1,0 +1,1 @@
+{"service": "usda", "params": {"query": "caesar salad", "pageSize": 8, "dataType": "Foundation"}, "saved_at": 1791923149.6089826, "payload": {"foods": [{"fdcId": 2758987, "description": "Salad dressing, Italian dressing, commercial, regular", "dataType": "Foundation", "foodNutrients": []}]}}

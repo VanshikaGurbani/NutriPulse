@@ -1,0 +1,193 @@
+import json
+
+import pytest
+import requests
+
+from nutripulse import apis
+from nutripulse.cache import DiskCache, stats
+
+
+class FakeResp:
+    def __init__(self, payload, status=200):
+        self.payload, self.status = payload, status
+        self.status_code = status
+
+    def raise_for_status(self):
+        if self.status >= 400:
+            raise requests.HTTPError(f"{self.status}")
+
+    def json(self):
+        return self.payload
+
+
+def fake_get(monkeypatch, payload, status=200):
+    calls = []
+
+    def _get(url, params=None, headers=None, timeout=None):
+        calls.append({"url": url, "params": params, "timeout": timeout})
+        return FakeResp(payload, status)
+
+    monkeypatch.setattr(apis._http, "get", _get)
+    return calls
+
+
+def test_usda_fetch_returns_foods_and_sets_timeout(monkeypatch):
+    calls = fake_get(monkeypatch, {"foods": [{"fdcId": 1}]})
+    assert [f["fdcId"] for f in apis.usda_fetch("rice", "SR Legacy")] == [1]
+    assert calls[0]["timeout"] == apis.TIMEOUT_S and calls[0]["params"]["dataType"] == "SR Legacy"
+    assert stats.api_calls == 1
+
+
+def test_usda_http_error_yields_empty_list(monkeypatch):
+    fake_get(monkeypatch, {}, status=500)
+    assert apis.usda_fetch("rice", None) == []
+
+
+def test_disk_cache_serves_second_call_and_counts(monkeypatch, tmp_path):
+    calls = fake_get(monkeypatch, {"foods": [{"fdcId": 7}]})
+    apis.configure_cache(DiskCache(tmp_path))
+    assert apis.usda_fetch("rice", "SR Legacy") == apis.usda_fetch("rice", "SR Legacy")
+    assert len(calls) == 1
+    assert (stats.api_calls, stats.cache_hits, stats.hit_rate) == (1, 1, 0.5)
+
+
+def test_cache_files_never_contain_api_keys(monkeypatch, tmp_path):
+    fake_get(monkeypatch, {"foods": []})
+    apis.configure_cache(DiskCache(tmp_path))
+    apis.usda_fetch("rice", None)
+    blob = "".join(p.read_text(encoding="utf-8") for p in tmp_path.iterdir())
+    assert "test-usda-key" not in blob and "api_key" not in blob
+
+
+def test_cache_key_ignores_api_key():
+    a = DiskCache.key("usda", {"query": "x", "api_key": "AAA"})
+    b = DiskCache.key("usda", {"query": "x", "api_key": "BBB"})
+    assert a == b
+
+
+def test_disk_cache_ttl_expiry(tmp_path):
+    c = DiskCache(tmp_path, ttl_seconds=60)
+    c.put("usda", {"query": "x"}, {"v": 1})
+    assert c.get("usda", {"query": "x"}) == {"v": 1}
+    path = next(tmp_path.iterdir())
+    entry = json.loads(path.read_text(encoding="utf-8"))
+    entry["saved_at"] -= 120
+    path.write_text(json.dumps(entry), encoding="utf-8")
+    assert c.get("usda", {"query": "x"}) is None
+
+
+NINJAS = {"items": [
+    {"name": "white rice", "serving_size_g": 200, "calories": 260, "protein_g": 5, "carbohydrates_total_g": 57,
+     "fat_total_g": 0.5, "fiber_g": 1, "sugar_g": 0, "sodium_mg": 2},
+    {"name": "carrots", "serving_size_g": 100, "calories": 41, "protein_g": 1, "carbohydrates_total_g": 10,
+     "fat_total_g": 0.2, "fiber_g": 3, "sugar_g": 5, "sodium_mg": 70},
+]}
+
+
+def test_calorieninjas_normalises_to_per_100g(monkeypatch):
+    fake_get(monkeypatch, NINJAS)
+    r = apis.search_food_nlp("2 cups white rice and carrots")
+    assert r["description"] == "White Rice + Carrots"
+    assert r["serving_g"] == 300.0
+    assert r["calories"] == pytest.approx((260 + 41) / 3, abs=0.1)
+
+
+def test_calorieninjas_without_key_returns_none(monkeypatch):
+    monkeypatch.setenv("CALORIENINJAS_KEY", "")
+    assert apis.search_food_nlp("rice") is None
+
+
+def test_calorieninjas_errors_return_none(monkeypatch):
+    fake_get(monkeypatch, {}, status=429)
+    assert apis.search_food_nlp("rice") is None
+    fake_get(monkeypatch, {"items": []})
+    assert apis.search_food_nlp("rice") is None
+    fake_get(monkeypatch, {"items": [{"serving_size_g": 100}]})   # missing "name"
+    assert apis.search_food_nlp("rice") is None
+
+
+def test_call_budget_blocks_live_calls_but_not_cache_hits(monkeypatch, tmp_path):
+    fake_get(monkeypatch, {"foods": []})
+    apis.configure_cache(DiskCache(tmp_path))
+    apis.set_call_budget(1)
+    try:
+        apis.usda_fetch("rice", None)
+        apis.usda_fetch("rice", None)                    # cached: allowed
+        with pytest.raises(apis.BudgetExceeded):
+            apis.usda_fetch("beans", None)               # would be 2nd live call
+        with pytest.raises(apis.BudgetExceeded):
+            apis.nlp_items("beans")                      # must not be swallowed as "no result"
+    finally:
+        apis.set_call_budget(None)
+
+
+def test_template_placeholder_keys_count_as_missing(monkeypatch):
+    monkeypatch.setenv("USDA_API_KEY", "your_usda_api_key_here")
+    assert apis.usda_key() is None
+
+
+def test_usda_retries_intermittent_400_then_succeeds(monkeypatch):
+    seq = [FakeResp({}, 400), FakeResp({}, 400), FakeResp({"foods": [{"fdcId": 9}]}, 200)]
+    monkeypatch.setattr(apis._http, "get", lambda *a, **k: seq.pop(0))
+    assert [f["fdcId"] for f in apis.usda_fetch("muffin", "Survey (FNDDS)")] == [9]
+    assert stats.api_calls == 3 and stats.retries == 2 and stats.errors == 0
+
+
+def test_usda_persistent_400_is_counted_not_cached(monkeypatch, tmp_path):
+    apis.configure_cache(DiskCache(tmp_path))
+    monkeypatch.setattr(apis._http, "get", lambda *a, **k: FakeResp({}, 400))
+    assert apis.usda_fetch("muffin", "Survey (FNDDS)") == []
+    assert stats.errors == 1 and stats.api_calls == apis.USDA_400_RETRIES + 1
+    assert not list(tmp_path.iterdir())
+
+
+def test_slim_usda_keeps_scorer_fields_and_drops_the_rest():
+    raw = {"foods": [{"fdcId": 5, "description": "Rice", "dataType": "SR Legacy", "brandOwner": "x", "ingredients": "y",
+                      "foodNutrients": [{"nutrientId": 1008, "value": 130, "unitName": "KCAL"},
+                                        {"nutrientId": 1087, "value": 10}]}]}
+    out = apis.slim_usda(raw)["foods"][0]
+    assert out == {"fdcId": 5, "description": "Rice", "dataType": "SR Legacy",
+                   "foodNutrients": [{"nutrientId": 1008, "value": 130}]}
+
+
+@pytest.mark.parametrize("exc,kind", [
+    (requests.Timeout(), "timeout"),
+    (requests.ConnectionError(), "unavailable"),
+    (requests.exceptions.RetryError("too many 429 error responses"), "rate_limit"),
+    (requests.exceptions.RetryError("too many 503 error responses"), "unavailable"),
+])
+def test_network_failures_become_typed_service_errors(monkeypatch, exc, kind):
+    def boom(*a, **k):
+        raise exc
+    monkeypatch.setattr(apis._http, "get", boom)
+    with pytest.raises(apis.ServiceError) as e:
+        apis.usda_fetch("rice", None)
+    assert e.value.kind == kind and e.value.user_message
+
+
+def test_http_429_is_a_rate_limit_error(monkeypatch):
+    fake_get(monkeypatch, {}, status=429)
+    with pytest.raises(apis.ServiceError) as e:
+        apis.usda_fetch("rice", None)
+    assert e.value.kind == "rate_limit"
+
+
+def test_slim_portions_handles_each_usda_shape():
+    raw = {"foodPortions": [
+        {"amount": 1.0, "gramWeight": 174.0, "modifier": "cup", "measureUnit": {"name": "undetermined"}},              # SR Legacy
+        {"amount": None, "gramWeight": 24, "modifier": "64354", "portionDescription": "1 small slice"},                 # survey food
+        {"amount": 1.0, "gramWeight": 50.3, "modifier": "whole without shell", "measureUnit": {"name": "egg"}},         # Foundation
+        {"amount": 1.0, "gramWeight": 50.0, "modifier": None, "measureUnit": {"name": "RACC"}},                         # no usable label
+        {"amount": None, "gramWeight": 28, "portionDescription": "Quantity not specified"}]}
+    assert apis.slim_portions(raw)["portions"] == [
+        {"label": "cup", "amount": 1.0, "grams": 174.0}, {"label": "1 small slice", "amount": None, "grams": 24.0},
+        {"label": "egg, whole without shell", "amount": 1.0, "grams": 50.3}]
+
+
+def test_usda_portions_are_cached_and_failures_degrade_to_empty(monkeypatch, tmp_path):
+    calls = fake_get(monkeypatch, {"foodPortions": [{"amount": 1.0, "gramWeight": 174.0, "modifier": "cup"}]})
+    apis.configure_cache(DiskCache(tmp_path))
+    assert apis.usda_portions(1) == apis.usda_portions(1) == [{"label": "cup", "amount": 1.0, "grams": 174.0}]
+    assert len(calls) == 1
+    fake_get(monkeypatch, {}, status=500)
+    assert apis.usda_portions(2) == [] and apis.usda_portions(None) == []

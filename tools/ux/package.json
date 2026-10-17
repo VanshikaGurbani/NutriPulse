@@ -1,0 +1,2 @@
+{ "name": "nutripulse-ux-tools", "private": true, "version": "0.0.0",
+  "dependencies": { "axe-core": "4.10.2", "lighthouse": "12.3.0" } }

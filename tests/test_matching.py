@@ -1,0 +1,192 @@
+import pytest
+
+from nutripulse.matching import (
+    MAX_SANE_CALORIES, _score, best_match, parse_serving, query_words, search_food, to_result,
+)
+from tests.conftest import fake_usda, food
+
+
+def top(query, *descs_kcal):
+    foods = [food(d, k) for d, k in descs_kcal]
+    return best_match(foods, query)[0]["description"]
+
+
+@pytest.mark.parametrize("query,candidates,expected", [
+    ("oatmeal", [("Bread, oatmeal", 280), ("Oatmeal, cooked, with water", 71)], "Oatmeal, cooked, with water"),
+    ("oatmeal", [("Cookies, oatmeal, with raisins", 430), ("Oatmeal, instant, plain", 68)], "Oatmeal, instant, plain"),
+    ("rice", [("Rice, white, raw", 360), ("Rice, white, cooked", 130)], "Rice, white, cooked"),
+    ("chicken breast", [("Soup, chicken broth", 10), ("Chicken, breast, cooked", 165)], "Chicken, breast, cooked"),
+])
+def test_scorer_prefers_expected(query, candidates, expected):
+    assert top(query, *candidates) == expected
+
+
+def test_user_specified_raw_disables_cooked_bonus():
+    q = query_words("raw rice")
+    cooked = _score(food("Rice, cooked"), q)
+    raw = _score(food("Rice, raw"), q)
+    # with "raw" in the query neither cooked_bonus nor raw_penalty applies, so only word hits/brevity differ
+    assert raw > cooked
+
+
+def test_raw_foods_get_no_cooked_bonus():
+    q = query_words("apple")
+    diff = _score(food("Apple, raw"), q) - _score(food("Apple, cooked"), q)
+    # identical apart from brevity (len("apple, raw") < len("apple, cooked"))
+    assert diff == pytest.approx((len("apple, cooked") - len("apple, raw")) / 200)
+
+
+def test_calorie_sanity_cap_applies_penalty():
+    q = query_words("butter")
+    sane = _score(food("Butter, salted", MAX_SANE_CALORIES), q)
+    insane = _score(food("Butter, salted", MAX_SANE_CALORIES + 1), q)
+    assert sane - insane == pytest.approx(50)
+
+
+def test_wrong_category_penalised_below_proper_match():
+    assert top("chicken", ("Soup, noodle, chicken", 40), ("Chicken, roasted", 190)) == "Chicken, roasted"
+
+
+def test_best_match_returns_score_tuple():
+    f, s = best_match([food("Banana, raw")], "banana")
+    assert f["description"] == "Banana, raw" and isinstance(s, float)
+
+
+def test_to_result_flags_low_confidence_when_no_query_word_present():
+    r = to_result(food("Completely unrelated"), 9.0, "oatmeal")
+    assert r["low_confidence"] is True
+
+
+def test_to_result_flags_suspicious_calories_and_keeps_fdc_id():
+    r = to_result(food("Oil, olive", 884, fdc_id=42), 12.0, "olive oil")
+    assert r["fdc_id"] == 42 and r["calories"] == 884.0 and r["suspicious_calories"] is False
+    assert to_result(food("Oil", 999), 12.0, "oil")["suspicious_calories"] is True
+
+
+def test_search_food_pipeline_with_fixture(monkeypatch):
+    pages = {"Foundation": [], "Survey (FNDDS)": [food("Bread, oatmeal", 280, fdc_id=1)],
+             "SR Legacy": [food("Oatmeal, cooked", 71, fdc_id=2)]}
+    fake_usda(monkeypatch, lambda q, dt, page_size=8: pages.get(dt, []))
+    assert search_food("oatmeal")["fdc_id"] == 2
+
+
+def test_search_food_returns_none_when_nothing_found(monkeypatch):
+    fake_usda(monkeypatch, lambda *a, **k: [])
+    assert search_food("zzzz") is None
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("2 cups oatmeal", (2.0, "cup", "oatmeal")),
+    ("1.5 oz chicken", (1.5, "oz", "chicken")),
+    ("1/2 cup of rice", (0.5, "cup", "rice")),
+    ("3 tbsp peanut butter", (3.0, "tbsp", "peanut butter")),
+    ("100g salmon", (100.0, "g", "salmon")),
+    ("2 slices bread", (2.0, "slice", "bread")),
+    ("banana", (100.0, "g", "banana")),
+    ("4 lbs beef", (4.0, "lb", "beef")),
+    ("pizza!!", (100.0, "g", "pizza")),
+])
+def test_parse_serving(text, expected):
+    assert parse_serving(text) == expected
+
+
+def test_weights_default_reproduces_score_and_zero_weight_disables_term():
+    from nutripulse.matching import ABLATION_GROUPS, DEFAULT_WEIGHTS, score_terms
+    f = food("Bread, oatmeal", 280)
+    q = query_words("oatmeal")
+    terms = score_terms(f, q)
+    assert _score(f, q) == pytest.approx(sum(DEFAULT_WEIGHTS[k] * v for k, v in terms.items()))
+    assert set(DEFAULT_WEIGHTS) >= {t for g in ABLATION_GROUPS.values() for t in g}
+    off = dict(DEFAULT_WEIGHTS, first_mismatch=0.0)
+    assert _score(f, q, off) - _score(f, q) == pytest.approx(8.0)
+
+
+def test_parallel_candidate_lists_match_sequential(monkeypatch):
+    from nutripulse import matching
+    data = {"Foundation": [food("A", 1, fdc_id=1)], "Survey (FNDDS)": [food("B", 2, fdc_id=2)], "SR Legacy": [food("C", 3, fdc_id=3)]}
+    fake_usda(monkeypatch, lambda q, dt, page_size=8: data[dt])
+    assert matching.candidate_lists("x", parallel=True) == matching.candidate_lists("x", parallel=False)
+
+
+def test_ranked_candidates_best_first_and_first_equals_best_match(monkeypatch):
+    from nutripulse import matching
+    foods = [food("Bread, oatmeal", 280, fdc_id=1), food("Oatmeal, cooked", 71, fdc_id=2), food("Cookies, oatmeal", 430, fdc_id=3)]
+    fake_usda(monkeypatch, lambda q, dt, page_size=8: foods if dt == "SR Legacy" else [])
+    ranked = matching.ranked_candidates("oatmeal", k=2)
+    assert [f["fdcId"] for f, _ in ranked][0] == matching.best_match(foods, "oatmeal")[0]["fdcId"] == 2
+    assert len(ranked) == 2 and ranked[0][1] >= ranked[1][1]
+
+
+@pytest.mark.parametrize("text,expected", [
+    # regression: the old pattern had no word boundary and ate the first letters of the food name
+    ("1 large egg", (1.0, "g", "large egg")),
+    ("100 grams chicken", (100.0, "g", "chicken")),
+    ("1 lemon", (1.0, "g", "lemon")),
+    ("1 liter milk", (1.0, "l", "milk")),
+    ("2 l water", (2.0, "l", "water")),
+    ("1.5 tablespoons oil", (1.5, "tbsp", "oil")),
+    ("2 teaspoons sugar", (2.0, "tsp", "sugar")),
+    ("1 ounce cheese", (1.0, "oz", "cheese")),
+    ("1 1/2 cups rice", (1.5, "cup", "rice")),
+    ("5 fl oz wine", (5.0, "floz", "wine")),
+])
+def test_parse_serving_does_not_corrupt_names_and_knows_more_units(text, expected):
+    assert parse_serving(text) == expected
+
+
+@pytest.mark.parametrize("text,known,grams", [
+    ("100g salmon", True, 100.0), ("2 cups rice", True, 480.0), ("1 liter milk", True, 1000.0), ("3 oz cheese", True, 85.05),
+    ("1 banana", False, None), ("2 eggs", False, None), ("2 slices bread", False, None), ("3 pieces chicken", False, None),
+    ("banana", False, None), ("1 large egg", False, None),
+])
+def test_parse_amount_only_trusts_stated_weights(text, known, grams):
+    from nutripulse.matching import parse_amount
+    a = parse_amount(text)
+    assert a["known"] is known and (a["grams"] is None if grams is None else a["grams"] == pytest.approx(grams))
+
+
+def test_parse_amount_flags_volume_units_as_approximate_and_hints_unknowns():
+    from nutripulse.matching import parse_amount
+    assert parse_amount("2 cups rice")["approx"] is True and parse_amount("100 g rice")["approx"] is False
+    assert parse_amount("2 slices bread")["hint"] == "2 slices of bread" and parse_amount("1 banana")["hint"] == "1 banana"
+
+
+def test_no_control_characters_in_source_files():
+    """A '\b' typed into a non-raw string becomes a backspace character and silently breaks a regex. Guard against it."""
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parent.parent
+    bad = [str(p) for d in ("nutripulse", "benchmark", "tools", "tests") for p in (root / d).rglob("*.py") if "\x08" in p.read_text(encoding="utf-8")]
+    assert bad == []
+
+
+@pytest.mark.parametrize("text,parts", [
+    ("2 cups white rice and carrots", ["2 cups white rice", "carrots"]),
+    ("rice, beans & corn", ["rice", "beans", "corn"]),
+    ("chicken with broccoli", ["chicken", "broccoli"]),
+    ("macaroni and cheese", ["macaroni", "cheese"]),
+    ("banana", ["banana"]),
+])
+def test_split_phrase(text, parts):
+    from nutripulse.matching import split_phrase
+    assert split_phrase(text) == parts
+
+
+def test_covers_query_decides_whether_a_match_explains_the_phrase():
+    from nutripulse.matching import covers_query
+    assert covers_query("Macaroni and cheese, boxed", "macaroni and cheese")
+    assert not covers_query("Rice, white, cooked", "white rice and carrots")
+    assert covers_query("Sandwich, peanut butter and jelly", "peanut butter and jelly sandwich")
+
+
+PORTIONS = [{"label": "cup, sliced", "amount": 1.0, "grams": 150.0}, {"label": "cup", "amount": 1.0, "grams": 174.0},
+            {"label": "1 tbsp", "amount": None, "grams": 12.0}, {"label": "2 tbsp", "amount": None, "grams": 24.0},
+            {"label": "medium (7\" to 7-7/8\" long)", "amount": 1.0, "grams": 118.0}]
+
+
+def test_portion_grams_prefers_plain_label_and_scales_by_quantity():
+    from nutripulse.matching import grams_from_portions
+    assert grams_from_portions(PORTIONS, "cup", 2) == (348.0, "cup")             # plain 'cup' beats 'cup, sliced'
+    assert grams_from_portions(PORTIONS, "tbsp", 3)[0] == pytest.approx(36.0)    # first plain '1 tbsp' = 12 g each
+    assert grams_from_portions(PORTIONS, "tsp", 1) is None
+    assert grams_from_portions([{"label": "cup, sliced", "amount": 1.0, "grams": 150.0}], "cup", 1) == (150.0, "cup, sliced")
+    assert grams_from_portions([{"label": "2 cups", "amount": None, "grams": 100.0}], "cup", 1)[0] == pytest.approx(50.0)

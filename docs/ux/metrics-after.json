@@ -1,0 +1,163 @@
+{
+  "version": "after",
+  "date": "2026-10-13 23:35",
+  "interaction": {
+    "375": [
+      {
+        "search_in_first_screen": true,
+        "search_box_y_px": 184,
+        "autofocused": false,
+        "focus_wait_ms": 3029,
+        "scroll_gestures": 2,
+        "search_ms_cold": 1386,
+        "clicks": 2,
+        "keystrokes": 30,
+        "viewport": "375",
+        "first_load_ms": 2592
+      },
+      {
+        "search_in_first_screen": true,
+        "search_box_y_px": 184,
+        "autofocused": false,
+        "focus_wait_ms": 3011,
+        "scroll_gestures": 2,
+        "search_ms_cold": 255,
+        "clicks": 2,
+        "keystrokes": 30,
+        "viewport": "375",
+        "first_load_ms": 1882
+      },
+      {
+        "search_in_first_screen": true,
+        "search_box_y_px": 184,
+        "autofocused": false,
+        "focus_wait_ms": 3017,
+        "scroll_gestures": 2,
+        "search_ms_cold": 149,
+        "clicks": 2,
+        "keystrokes": 30,
+        "viewport": "375",
+        "first_load_ms": 1767
+      }
+    ],
+    "1280": [
+      {
+        "search_in_first_screen": true,
+        "search_box_y_px": 154,
+        "autofocused": true,
+        "focus_wait_ms": 6,
+        "scroll_gestures": 1,
+        "search_ms_cold": 1364,
+        "clicks": 1,
+        "keystrokes": 30,
+        "viewport": "1280",
+        "first_load_ms": 2302
+      },
+      {
+        "search_in_first_screen": true,
+        "search_box_y_px": 154,
+        "autofocused": true,
+        "focus_wait_ms": 5,
+        "scroll_gestures": 1,
+        "search_ms_cold": 172,
+        "clicks": 1,
+        "keystrokes": 30,
+        "viewport": "1280",
+        "first_load_ms": 1701
+      },
+      {
+        "search_in_first_screen": true,
+        "search_box_y_px": 154,
+        "autofocused": true,
+        "focus_wait_ms": 5,
+        "scroll_gestures": 1,
+        "search_ms_cold": 213,
+        "clicks": 1,
+        "keystrokes": 30,
+        "viewport": "1280",
+        "first_load_ms": 1684
+      }
+    ]
+  },
+  "latency": {
+    "load_cold_ms": 2286,
+    "load_warm_ms": 1121,
+    "repeat_search_ms": 214
+  },
+  "axe": {
+    "per_tab": {
+      "Today": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "nodes": 1,
+          "help": "Elements must meet minimum color contrast ratio thresholds"
+        },
+        {
+          "id": "region",
+          "impact": "moderate",
+          "nodes": 7,
+          "help": "All page content should be contained by landmarks"
+        }
+      ],
+      "Insights": [
+        {
+          "id": "region",
+          "impact": "moderate",
+          "nodes": 7,
+          "help": "All page content should be contained by landmarks"
+        }
+      ],
+      "Profile": [
+        {
+          "id": "aria-allowed-attr",
+          "impact": "critical",
+          "nodes": 1,
+          "help": "Elements must only use supported ARIA attributes"
+        },
+        {
+          "id": "button-name",
+          "impact": "critical",
+          "nodes": 18,
+          "help": "Buttons must have discernible text"
+        },
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "nodes": 1,
+          "help": "Elements must meet minimum color contrast ratio thresholds"
+        },
+        {
+          "id": "region",
+          "impact": "moderate",
+          "nodes": 7,
+          "help": "All page content should be contained by landmarks"
+        }
+      ],
+      "History": [
+        {
+          "id": "region",
+          "impact": "moderate",
+          "nodes": 7,
+          "help": "All page content should be contained by landmarks"
+        }
+      ]
+    },
+    "violation_rules_total": 8,
+    "violating_nodes_total": 49,
+    "rules_by_impact": {
+      "serious": 2,
+      "moderate": 4,
+      "critical": 2
+    }
+  },
+  "lighthouse": {
+    "scores": [
+      100,
+      100,
+      100
+    ],
+    "median": 100,
+    "preset": "lighthouse default (mobile emulation)"
+  }
+}
