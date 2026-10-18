@@ -108,6 +108,7 @@ Each entry names the change and the problem it fixes (numbers refer to [`audit.m
 
 ## Known limitations (not fixed)
 
+- **Setting a goal takes more clicks than before** (3 in Profile vs 1 on the old Today tab; see `task-walkthrough.md`). A shortcut on Today would fix it.
 - The match badge thresholds and the scorer itself are not yet validated; the accuracy benchmark exists to do that and still needs labels.
   On real data the scorer picked "egg yolk" for "2 large eggs" and a breaded product for "chicken breast".
 - Foods USDA has no serving sizes for still fall back to the water-density approximation for cups and spoons (flagged in the UI).

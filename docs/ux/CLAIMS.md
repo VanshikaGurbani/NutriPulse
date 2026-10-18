@@ -20,6 +20,8 @@ All measurements: Chromium via Playwright (Lighthouse via Google Chrome), one Wi
 | 10 | "A phrase with several foods is split into separate ingredient rows, each with source and match badges and an editable amount, instead of one merged row." | 3 table rows (2 items + total) for "2 cups white rice and carrots" | 1 | Real-browser smoke test counts table rows. | `tools/ux/e2e_smoke.py` |
 | 11 | "Cup and spoon amounts use the matched food's own USDA serving size when it has one, instead of assuming the food weighs the same as water." | 1 cup of cooked white rice = 174 g (water assumption: 240 g); 3 tbsp peanut butter = 48 g (water assumption: 45 g) | 7 phrases, illustrative | Real USDA data with CalorieNinjas disabled. Not an accuracy measurement: the matched food is the scorer's choice and can be wrong. | `docs/ux/amounts-check.md` (`tools/ux/check_amounts.py`) |
 
+| 12 | "In a scripted walkthrough of three tasks, the current UI can complete all three and the original cannot complete 'find yesterday's total' from a fresh visit, because nothing survives a refresh." | current UI 3/3 runs on all tasks (T3 answer 1,203 kcal matched the expected value); original T1 3/3, T2 3/3, T3 0/3 | 3 runs per version, fresh servers, 1 phrase, scripted (not people) | Playwright on the real CalorieNinjas API; the answer on screen is compared with the stored value. Best-case steps only. | `docs/ux/task-walkthrough.json`, `docs/ux/task-walkthrough.md` |
+
 ## Measured but NOT claimable as an improvement
 
 | Measurement | Before | After | Why not |
@@ -27,6 +29,7 @@ All measurements: Chromium via Playwright (Lighthouse via Google Chrome), one Wi
 | Keystrokes to log a first food | 29 | 30 | Unchanged (one more for Enter); the saving is in clicks and scrolling. |
 | Cold first page load | 2,177 ms | 2,181, 2,316 and 2,286 ms in three runs | No difference; run-to-run spread is larger than any gap. |
 | First search on a fresh server | 1,393 ms (375 px) / 1,391 ms (1280 px) | 1,363 / 875 ms, 1,481 / 1,403 ms, 1,386 / 1,364 ms in three runs | Single measurements. The 875 ms from run 1 did not repeat, which is why none of these is claimed. |
+| Setting a daily goal (scripted) | 1 click, 7 keystrokes (field on Today) | 3 clicks, 4 keystrokes (Profile tab); this is slower, not an improvement. See `task-walkthrough.md` |
 | Repeat (cached) search | 175 ms | 169, 254 and 214 ms in three runs | No meaningful difference. |
 
 ## Not measured yet

@@ -1,0 +1,220 @@
+{
+  "note": "Scripted walkthrough, NOT a usability test: best-case steps and times, 3 runs per version on fresh servers, one machine, real CalorieNinjas data, 1280x800 desktop. No participants, no SUS.",
+  "date": "2026-10-17 20:15",
+  "runs": {
+    "new_ui": [
+      {
+        "T1 log a meal": {
+          "completed": true,
+          "clicks": 2,
+          "keystrokes": 31,
+          "seconds": 1.2,
+          "note": "2 ingredient rows found, 2 entries logged"
+        },
+        "T2 set a goal": {
+          "completed": true,
+          "clicks": 3,
+          "keystrokes": 4,
+          "seconds": 2.2,
+          "note": "summary shows the 1,800 kcal goal"
+        },
+        "T3 find yesterday's total": {
+          "completed": true,
+          "clicks": 1,
+          "keystrokes": 0,
+          "seconds": 0.0,
+          "note": "History row 'Fri 16 Oct' shows 1203 kcal, expected 1203"
+        }
+      },
+      {
+        "T1 log a meal": {
+          "completed": true,
+          "clicks": 2,
+          "keystrokes": 31,
+          "seconds": 1.2,
+          "note": "2 ingredient rows found, 2 entries logged"
+        },
+        "T2 set a goal": {
+          "completed": true,
+          "clicks": 3,
+          "keystrokes": 4,
+          "seconds": 2.9,
+          "note": "summary shows the 1,800 kcal goal"
+        },
+        "T3 find yesterday's total": {
+          "completed": true,
+          "clicks": 1,
+          "keystrokes": 0,
+          "seconds": 0.0,
+          "note": "History row 'Fri 16 Oct' shows 1203 kcal, expected 1203"
+        }
+      },
+      {
+        "T1 log a meal": {
+          "completed": true,
+          "clicks": 2,
+          "keystrokes": 31,
+          "seconds": 1.2,
+          "note": "2 ingredient rows found, 2 entries logged"
+        },
+        "T2 set a goal": {
+          "completed": true,
+          "clicks": 3,
+          "keystrokes": 4,
+          "seconds": 2.8,
+          "note": "summary shows the 1,800 kcal goal"
+        },
+        "T3 find yesterday's total": {
+          "completed": true,
+          "clicks": 1,
+          "keystrokes": 0,
+          "seconds": 0.0,
+          "note": "History row 'Fri 16 Oct' shows 1203 kcal, expected 1203"
+        }
+      }
+    ],
+    "old_ui": [
+      {
+        "T1 log a meal": {
+          "completed": true,
+          "clicks": 3,
+          "keystrokes": 30,
+          "seconds": 3.7,
+          "note": "logged as ONE merged row (the old UI cannot show ingredients separately)"
+        },
+        "T2 set a goal": {
+          "completed": true,
+          "clicks": 1,
+          "keystrokes": 7,
+          "seconds": 1.2,
+          "note": "goal changed from the 2000 default"
+        },
+        "T3 find yesterday's total": {
+          "completed": false,
+          "clicks": null,
+          "keystrokes": null,
+          "seconds": 2.3,
+          "note": "after a page refresh the History tab is empty: nothing from earlier days survives (state lived only in the browser session)"
+        }
+      },
+      {
+        "T1 log a meal": {
+          "completed": true,
+          "clicks": 3,
+          "keystrokes": 30,
+          "seconds": 3.6,
+          "note": "logged as ONE merged row (the old UI cannot show ingredients separately)"
+        },
+        "T2 set a goal": {
+          "completed": true,
+          "clicks": 1,
+          "keystrokes": 7,
+          "seconds": 1.2,
+          "note": "goal changed from the 2000 default"
+        },
+        "T3 find yesterday's total": {
+          "completed": false,
+          "clicks": null,
+          "keystrokes": null,
+          "seconds": 2.3,
+          "note": "after a page refresh the History tab is empty: nothing from earlier days survives (state lived only in the browser session)"
+        }
+      },
+      {
+        "T1 log a meal": {
+          "completed": true,
+          "clicks": 3,
+          "keystrokes": 30,
+          "seconds": 3.7,
+          "note": "logged as ONE merged row (the old UI cannot show ingredients separately)"
+        },
+        "T2 set a goal": {
+          "completed": true,
+          "clicks": 1,
+          "keystrokes": 7,
+          "seconds": 1.2,
+          "note": "goal changed from the 2000 default"
+        },
+        "T3 find yesterday's total": {
+          "completed": false,
+          "clicks": null,
+          "keystrokes": null,
+          "seconds": 2.3,
+          "note": "after a page refresh the History tab is empty: nothing from earlier days survives (state lived only in the browser session)"
+        }
+      }
+    ]
+  },
+  "summary": {
+    "new_ui": {
+      "T1 log a meal": {
+        "completed": "3/3",
+        "clicks": [
+          2
+        ],
+        "keystrokes": [
+          31
+        ],
+        "median_seconds": 1.2,
+        "note": "2 ingredient rows found, 2 entries logged"
+      },
+      "T2 set a goal": {
+        "completed": "3/3",
+        "clicks": [
+          3
+        ],
+        "keystrokes": [
+          4
+        ],
+        "median_seconds": 2.8,
+        "note": "summary shows the 1,800 kcal goal"
+      },
+      "T3 find yesterday's total": {
+        "completed": "3/3",
+        "clicks": [
+          1
+        ],
+        "keystrokes": [
+          0
+        ],
+        "median_seconds": 0.0,
+        "note": "History row 'Fri 16 Oct' shows 1203 kcal, expected 1203"
+      }
+    },
+    "old_ui": {
+      "T1 log a meal": {
+        "completed": "3/3",
+        "clicks": [
+          3
+        ],
+        "keystrokes": [
+          30
+        ],
+        "median_seconds": 3.7,
+        "note": "logged as ONE merged row (the old UI cannot show ingredients separately)"
+      },
+      "T2 set a goal": {
+        "completed": "3/3",
+        "clicks": [
+          1
+        ],
+        "keystrokes": [
+          7
+        ],
+        "median_seconds": 1.2,
+        "note": "goal changed from the 2000 default"
+      },
+      "T3 find yesterday's total": {
+        "completed": "0/3",
+        "clicks": [
+          null
+        ],
+        "keystrokes": [
+          null
+        ],
+        "median_seconds": 2.3,
+        "note": "after a page refresh the History tab is empty: nothing from earlier days survives (state lived only in the browser session)"
+      }
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # Usability test kit
 
-**Status: no sessions have been run. Every results table below is intentionally empty.** Fill them in only with real observations.
+**Status: no sessions with people have been run. Every results table below is intentionally empty.** A scripted walkthrough of the same three tasks (best-case steps only, no participants, no SUS) is in [`task-walkthrough.md`](task-walkthrough.md). Fill them in only with real observations.
 Nothing from this file may be quoted as a result until it has data in it.
 
 ## Plan
